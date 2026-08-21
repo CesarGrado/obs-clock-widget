@@ -30,6 +30,12 @@ npm run test:e2e
 
 The fragment is readable, not encrypted. It contains visual settings only and is not sent to the static host. The app uses no account, cookies, storage, analytics, telemetry, service worker, or third-party runtime network calls.
 
+### Recover or edit an existing clock
+
+In the editor's **Output** section, paste either the complete generated OBS URL or only its `v=1&...` fragment into **Load existing OBS URL or fragment**, then select **Load** (or press Enter). A successful import replaces the editor settings; change any value and copy the newly generated URL back into OBS.
+
+For safety, the editor accepts runtime URLs only from the current deployment origin or `https://obs-clock-widget.pages.dev`, and only on `/v1/clock/`. It rejects query-string settings, other routes or origins, credentials, duplicate or unknown settings, malformed encoding, unsupported versions, and oversized fragments. If loading fails, the current editor settings and generated URL are preserved. Re-copy the complete Browser Source URL from OBS, confirm it contains `#v=1`, and try again; otherwise recreate the settings manually. Do not move the fragment after `#` into a query string after `?`.
+
 ## Format tokens
 
 `HH H h mm m ss s a`, `dddd ddd`, `MMMM MMM M`, `D`, `YYYY YY`. Wrap literal text in single quotes.

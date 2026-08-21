@@ -114,6 +114,53 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('loads an existing OBS URL and supports Enter submission', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const existing = app.querySelector<HTMLInputElement>('#existing-obs-url')!;
+    expect(app.querySelector('label[for="existing-obs-url"]')?.textContent).toContain('Load existing');
+    existing.value = 'https://obs-clock-widget.pages.dev/v1/clock/#v=1&tz=Asia%2FKathmandu&f1=HH%3Amm';
+    existing.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect((app.querySelector('#timezone') as HTMLInputElement).value).toBe('Asia/Kathmandu');
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('HH:mm');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('tz=Asia%2FKathmandu&f1=HH%3Amm');
+    expect(location.hash).toBe('#v=1&tz=Asia%2FKathmandu&f1=HH%3Amm');
+    expect(app.querySelector('#import-status')?.textContent).toBe('Existing OBS URL loaded.');
+    editor.destroy();
+  });
+
+  it('preserves editor state after a failed import', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    const before = {
+      format: format.value,
+      timezone: (app.querySelector('#timezone') as HTMLInputElement).value,
+      preview: app.querySelector('#preview-root')?.textContent,
+      hash: location.hash,
+      url: (app.querySelector('#obs-url') as HTMLInputElement).value,
+    };
+    const existing = app.querySelector<HTMLInputElement>('#existing-obs-url')!;
+    existing.value = '#v=1&tz=UTC&tz=UTC';
+    (app.querySelector('#load-existing') as HTMLButtonElement).click();
+
+    expect({
+      format: format.value,
+      timezone: (app.querySelector('#timezone') as HTMLInputElement).value,
+      preview: app.querySelector('#preview-root')?.textContent,
+      hash: location.hash,
+      url: (app.querySelector('#obs-url') as HTMLInputElement).value,
+    }).toEqual(before);
+    expect(app.querySelector('#import-status')?.textContent).toContain('could not be loaded');
+    expect(app.querySelector('#import-status')?.textContent).not.toContain('duplicate-key');
+    expect(existing.getAttribute('aria-invalid')).toBe('true');
+
+    existing.value = '#v=1'; existing.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(existing.hasAttribute('aria-invalid')).toBe(false);
+    expect(app.querySelector('#import-status')?.textContent).toBe('');
+    editor.destroy();
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();

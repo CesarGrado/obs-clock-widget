@@ -20,6 +20,7 @@ import { cloneClockConfig } from '../config/clone';
 import { PRESETS } from '../config/presets';
 import { renderClock } from '../clock/renderer';
 import { validateFormat } from '../time/format';
+import { parseConfigImport } from '../config/import';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -54,6 +55,9 @@ function buildEditor(app: HTMLElement) {
   labeled(global, 'Alignment', select('align', ['left','center','right'])); labeled(global, 'Line gap', input('gap', 'number', 0, 80)); labeled(global, 'Stroke', input('stroke', 'number', 0, 8)); labeled(global, 'Shadow', input('shadow', 'number', 0, 30)); panel.append(global);
   buildLine(panel, 1); buildLine(panel, 2); panel.append(element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
   const output = element('fieldset'); output.append(element('legend', {}, 'Output')); const url = input('obs-url', 'text'); url.readOnly = true; labeled(output, 'OBS URL', url);
+  const importForm = element('form', { class: 'import-existing', novalidate: '' }); const existingUrl = input('existing-obs-url', 'text'); existingUrl.maxLength = 4096; existingUrl.setAttribute('autocomplete', 'off'); existingUrl.setAttribute('aria-describedby', 'import-help import-status');
+  importForm.append(element('label', { for: 'existing-obs-url' }, 'Load existing OBS URL or fragment'), existingUrl, element('button', { id: 'load-existing', type: 'submit' }, 'Load'));
+  output.append(importForm, element('p', { id: 'import-help', class: 'help' }, 'Paste a generated /v1/clock/ URL, or its fragment beginning with v=1 or #v=1.'), element('p', { id: 'import-status', role: 'status', 'aria-live': 'polite' }));
   const actions = element('div', { class: 'actions' }); actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy OBS URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy setup text'), element('button', { id: 'open-preview', type: 'button' }, 'Open widget preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'));
   output.append(actions, element('p', { id: 'copy-status', role: 'status', 'aria-live': 'polite' }), element('p', { id: 'url-warning', class: 'warning' })); panel.append(output);
   const help = element('section', { class: 'instructions' }); help.append(element('h2', {}, 'Add to OBS'), element('ol'));
@@ -118,6 +122,22 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { const control = event.target as HTMLInputElement; if (!control.validity.valid) return; config[key] = Number(control.value); refresh(); }));
   byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = cloneClockConfig(chosen); sync(); refresh(); } });
   byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });
+  const importForm = app.querySelector<HTMLFormElement>('.import-existing')!;
+  const existingUrl = byId<HTMLInputElement>('existing-obs-url');
+  importForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const result = parseConfigImport(existingUrl.value);
+    if (!result.ok || !isTimezoneSupported(result.config.timezone)) {
+      existingUrl.setAttribute('aria-invalid', 'true');
+      byId('import-status').textContent = 'This URL could not be loaded. Check that it is an unmodified generated clock URL or fragment, then try again.';
+      return;
+    }
+    existingUrl.removeAttribute('aria-invalid');
+    config = result.config; byId<HTMLSelectElement>('preset').value = 'Custom'; byId('timezone-error').textContent = ''; sync(); refresh();
+    byId('import-status').textContent = 'Existing OBS URL loaded.';
+  });
+  existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
+  existingUrl.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); importForm.requestSubmit(); } });
   byId('reset').addEventListener('click', () => { config = cloneClockConfig(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: 1920 × 300\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));

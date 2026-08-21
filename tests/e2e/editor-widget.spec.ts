@@ -10,6 +10,27 @@ test('editor config reproduces in the permanent widget route', async ({ page, co
   expect(await widget.evaluate(() => ({ x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight }))).toEqual({ x: 0, y: 0 });
 });
 
+test('imports a production OBS URL, edits it, and opens the regenerated widget accessibly', async ({ page, context }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto('/editor/');
+  const existing = page.getByLabel('Load existing OBS URL or fragment');
+  await existing.fill('https://obs-clock-widget.pages.dev/v1/clock/#v=1&tz=Pacific%2FChatham&f1=HH%3Amm&c1=%2300FFAA');
+  await existing.press('Enter');
+  await expect(page.locator('#import-status')).toHaveText('Existing OBS URL loaded.');
+  await expect(page.locator('#timezone')).toHaveValue('Pacific/Chatham');
+  await page.locator('#line1-color').fill('#ff00aa');
+
+  const regenerated = await page.locator('#obs-url').inputValue();
+  expect(regenerated).toContain('tz=Pacific%2FChatham');
+  expect(regenerated).toContain('c1=%23FF00AA');
+  const widget = await context.newPage(); await widget.goto(regenerated);
+  await expect(widget.locator('.clock-line').first()).toHaveCSS('color', 'rgb(255, 0, 170)');
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious','critical'].includes(violation.impact ?? ''))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('runtime is transparent and makes only same-origin static requests', async ({ page }) => {
   const unexpected: string[] = []; page.on('request', (request) => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') unexpected.push(request.url()); });
   await page.goto('/v1/clock/#v=1'); await expect(page.locator('#clock-root')).toBeVisible(); expect(unexpected).toEqual([]);
