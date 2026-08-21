@@ -82,6 +82,19 @@ describe('clock editor', () => {
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
     editor.destroy(); vi.restoreAllMocks();
   });
+  it('selects a timezone option through click activation', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'mexico city'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    const option = app.querySelector<HTMLElement>('[role="option"]')!;
+    expect(option.textContent).toContain('America/Mexico_City');
+    option.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(timezone.value).toBe('America/Mexico_City');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('tz=America%2FMexico_City');
+    expect(app.querySelector('#timezone-error')?.textContent).toBe('');
+    editor.destroy();
+  });
+
   it('clears stale active descendants when timezone search results are rebuilt', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const timezone = app.querySelector<HTMLInputElement>('#timezone')!;

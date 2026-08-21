@@ -84,7 +84,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   };
   const showTimezoneOptions = (query: string) => {
     const descriptions = searchTimezones(query); visibleTimezones = descriptions.map(({ id }) => id); activeTimezone = -1; timezoneInput.removeAttribute('aria-activedescendant'); timezoneOptions.replaceChildren();
-    descriptions.forEach((description, index) => { const item = element('div', { id: `timezone-option-${index}`, role: 'option', class: 'timezone-option', 'aria-selected': 'false' }, description.display); item.addEventListener('mousedown', (event) => { event.preventDefault(); chooseTimezone(description.id); }); timezoneOptions.append(item); });
+    descriptions.forEach((description, index) => { const item = element('div', { id: `timezone-option-${index}`, role: 'option', class: 'timezone-option', 'aria-selected': 'false' }, description.display); item.addEventListener('mousedown', (event) => event.preventDefault()); item.addEventListener('click', () => chooseTimezone(description.id)); timezoneOptions.append(item); });
     timezoneInput.setAttribute('aria-expanded', String(descriptions.length > 0));
   };
   const validateTimezoneInput = () => {
