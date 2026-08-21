@@ -9,3 +9,5 @@ Bundled web fonts are sourced from Fontsource packages:
 Each is licensed under the SIL Open Font License 1.1. Full license text: https://openfontlicense.org/open-font-license-official-text/
 
 Font files are emitted as same-origin hashed WOFF and WOFF2 assets during the build. No font provider is contacted at runtime.
+
+The canonical timezone catalog in `src/timezones/generated.ts` is generated from the IANA Time Zone Database `zone.tab` installed with system tzdata. The IANA Time Zone Database is public-domain data. See https://www.iana.org/time-zones.

@@ -43,6 +43,64 @@ describe('clock editor', () => {
     expect((app.querySelector('.clock-line') as HTMLElement).style.fontSize).toBe(beforeSize);
     editor.destroy();
   });
+  it('searches and keyboard-selects a canonical timezone while storing only its ID', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    expect(timezone.getAttribute('role')).toBe('combobox');
+    expect(timezone.getAttribute('aria-controls')).toBe('timezone-options');
+    timezone.value = 'kathmandu'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('[role="option"]')?.textContent).toContain('Asia/Kathmandu');
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(timezone.value).toBe('Asia/Kathmandu');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('tz=Asia%2FKathmandu');
+    expect(app.querySelector('#timezone-error')?.textContent).toBe('');
+    editor.destroy();
+  });
+  it('rejects arbitrary timezone text and preserves the last valid URL and preview', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    const beforeUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    const beforePreview = app.querySelector('#preview-root')?.textContent;
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector('#timezone-error')?.textContent).toContain('Choose a timezone');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
+    expect(app.querySelector('#preview-root')?.textContent).toBe(beforePreview);
+    editor.destroy();
+  });
+  it('reports catalog zones unavailable in the current browser and preserves valid config', () => {
+    const Original = Intl.DateTimeFormat;
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => {
+      if (options?.timeZone === 'Pacific/Chatham') throw new RangeError('unsupported');
+      return new Original(locales, options);
+    }) as typeof Intl.DateTimeFormat);
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    const beforeUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    timezone.value = 'Pacific/Chatham'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector('#timezone-error')?.textContent).toContain('not supported');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
+    editor.destroy(); vi.restoreAllMocks();
+  });
+  it('clears stale active descendants when timezone search results are rebuilt', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'america'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(timezone.getAttribute('aria-activedescendant')).toBeTruthy();
+
+    timezone.value = 'america new'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(timezone.hasAttribute('aria-activedescendant')).toBe(false);
+    expect(timezone.getAttribute('aria-expanded')).toBe('true');
+
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(timezone.getAttribute('aria-activedescendant')).toBeTruthy();
+    timezone.value = 'definitely no timezone'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(timezone.hasAttribute('aria-activedescendant')).toBe(false);
+    expect(timezone.getAttribute('aria-expanded')).toBe('false');
+    editor.destroy();
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();

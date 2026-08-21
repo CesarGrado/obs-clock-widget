@@ -21,6 +21,44 @@ test('malformed and injection fragments fall back without executing markup', asy
   await expect(page.locator('.clock-line')).toHaveCount(2); expect(await page.evaluate(() => (window as unknown as { pwned?: number }).pwned)).toBeUndefined(); await expect(page.locator('#clock-root img, #clock-root script')).toHaveCount(0);
 });
 
+test('timezone picker searches friendly names and supports keyboard selection', async ({ page }) => {
+  await page.goto('/editor/');
+  const timezone = page.getByRole('combobox', { name: 'Timezone' });
+  await timezone.fill('lord howe');
+  const listbox = page.getByRole('listbox'); const option = listbox.getByRole('option').first();
+  await expect(option).toContainText('Australia/Lord_Howe');
+  await expect(option).toContainText(/UTC[+−]\d{2}:\d{2}/);
+  await timezone.press('ArrowDown'); await timezone.press('Enter');
+  await expect(timezone).toHaveValue('Australia/Lord_Howe');
+  await expect(page.locator('#obs-url')).toHaveValue(/tz=Australia%2FLord_Howe/);
+});
+
+test('timezone picker keeps the keyboard-active option visible while navigating', async ({ page }) => {
+  await page.goto('/editor/');
+  const timezone = page.getByRole('combobox', { name: 'Timezone' });
+  await timezone.fill('america');
+  for (let index = 0; index < 20; index += 1) await timezone.press('ArrowDown');
+  const visibility = await page.evaluate(() => {
+    const input = document.querySelector<HTMLInputElement>('#timezone')!;
+    const listbox = document.querySelector<HTMLElement>('#timezone-options')!;
+    const activeId = input.getAttribute('aria-activedescendant')!;
+    const active = document.getElementById(activeId)!;
+    const itemRect = active.getBoundingClientRect();
+    const listRect = listbox.getBoundingClientRect();
+    return { visible: itemRect.top >= listRect.top && itemRect.bottom <= listRect.bottom, scrollTop: listbox.scrollTop };
+  });
+  expect(visibility.visible).toBe(true);
+  expect(visibility.scrollTop).toBeGreaterThan(0);
+});
+
+test('timezone picker remains accessible without narrow viewport overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
+  const timezone = page.getByRole('combobox', { name: 'Timezone' }); await timezone.fill('america');
+  const listbox = page.getByRole('listbox'); await expect(listbox).toBeVisible(); await expect(listbox.getByRole('option').first()).toBeVisible();
+  const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('editor is accessible and has no narrow viewport overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
   const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);

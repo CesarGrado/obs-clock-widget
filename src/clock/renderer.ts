@@ -19,7 +19,13 @@ export function renderClock(root: HTMLElement, config: ClockConfig, now: () => D
     node.style.webkitTextStroke = config.stroke ? `${config.stroke}px rgba(0,0,0,.85)` : '0px'; node.style.textShadow = config.shadow ? `0 ${Math.max(1, config.shadow / 3)}px ${config.shadow}px rgba(0,0,0,.85)` : 'none';
     stage.append(node); return { line, node };
   });
-  const update = () => { const instant = now(); nodes.forEach(({ line, node }) => { node.textContent = formatClock(instant, line.format, config.timezone, config.locale); }); };
+  let failed = false;
+  const update = () => {
+    if (failed) return;
+    const instant = now();
+    try { nodes.forEach(({ line, node }) => { node.textContent = formatClock(instant, line.format, config.timezone, config.locale); }); }
+    catch { failed = true; const error = document.createElement('div'); error.className = 'clock-error'; error.setAttribute('role', 'alert'); error.textContent = 'Timezone unavailable in this browser.'; stage.replaceChildren(error); }
+  };
   const stop = startClock(update, active.some((line) => formatHasSeconds(line.format)));
   return { stop, update };
 }

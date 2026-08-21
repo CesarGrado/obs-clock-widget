@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/defaults';
 import { renderClock } from '../../src/clock/renderer';
 
@@ -15,5 +15,17 @@ describe('safe clock renderer', () => {
       { ...DEFAULT_CONFIG.lines[1], enabled: false },
     ] as typeof DEFAULT_CONFIG.lines };
     const controller = renderClock(root, config); expect(root.textContent).toBe(''); controller.stop();
+  });
+  it('fails safely when the runtime Intl data does not support a catalog timezone', () => {
+    const Original = Intl.DateTimeFormat;
+    vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => {
+      if (options?.timeZone === 'Pacific/Chatham') throw new RangeError('host detail must not leak');
+      return new Original(locales, options);
+    }) as typeof Intl.DateTimeFormat);
+    const root = document.createElement('div');
+    expect(() => renderClock(root, { ...DEFAULT_CONFIG, timezone: 'Pacific/Chatham' })).not.toThrow();
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe('Timezone unavailable in this browser.');
+    expect(root.textContent).not.toContain('host detail');
+    vi.restoreAllMocks();
   });
 });

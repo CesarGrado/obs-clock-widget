@@ -14,7 +14,8 @@ import '../styles/base.css';
 import '../styles/editor.css';
 import '../styles/clock.css';
 import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
-import { DEFAULT_CONFIG, FONT_IDS, LOCALES, TIMEZONES, type ClockLine } from '../config/defaults';
+import { DEFAULT_CONFIG, FONT_IDS, LOCALES, type ClockLine } from '../config/defaults';
+import { isCatalogTimezone, isTimezoneSupported, searchTimezones, type TimezoneId } from '../timezones/catalog';
 import { cloneClockConfig } from '../config/clone';
 import { PRESETS } from '../config/presets';
 import { renderClock } from '../clock/renderer';
@@ -43,7 +44,13 @@ function buildEditor(app: HTMLElement) {
   const header = element('header'); header.append(element('p', { class: 'eyebrow' }, 'OBS BROWSER SOURCE'), element('h1', {}, 'Clock Overlay Studio'), element('p', {}, 'Design a transparent two-line clock, then copy its permanent URL into OBS.'));
   const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
   const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
-  const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset); labeled(global, 'Timezone', select('timezone', TIMEZONES)); labeled(global, 'Locale', select('locale', LOCALES));
+  const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset);
+  const timezoneWrap = element('div', { class: 'timezone-picker' });
+  const timezone = input('timezone', 'text');
+  timezone.setAttribute('role', 'combobox'); timezone.setAttribute('autocomplete', 'off'); timezone.setAttribute('aria-autocomplete', 'list'); timezone.setAttribute('aria-controls', 'timezone-options'); timezone.setAttribute('aria-expanded', 'false'); timezone.setAttribute('aria-describedby', 'timezone-help timezone-error');
+  timezoneWrap.append(timezone, element('div', { id: 'timezone-options', class: 'timezone-options', role: 'listbox' }));
+  global.append(element('label', { for: 'timezone' }, 'Timezone'), timezoneWrap, element('p', { id: 'timezone-help', class: 'help' }, 'Search by city, region, canonical ID, or UTC offset.'), element('p', { id: 'timezone-error', class: 'error', role: 'alert' }));
+  labeled(global, 'Locale', select('locale', LOCALES));
   labeled(global, 'Alignment', select('align', ['left','center','right'])); labeled(global, 'Line gap', input('gap', 'number', 0, 80)); labeled(global, 'Stroke', input('stroke', 'number', 0, 8)); labeled(global, 'Shadow', input('shadow', 'number', 0, 30)); panel.append(global);
   buildLine(panel, 1); buildLine(panel, 2); panel.append(element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
   const output = element('fieldset'); output.append(element('legend', {}, 'Output')); const url = input('obs-url', 'text'); url.readOnly = true; labeled(output, 'OBS URL', url);
@@ -62,13 +69,44 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let clock: ReturnType<typeof renderClock> | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const sync = () => {
-    byId<HTMLSelectElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
+    byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format;
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); byId<HTMLSelectElement>(`line${n}-weight`).value = String(line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
   const refresh = () => { clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.'; };
+  const timezoneInput = byId<HTMLInputElement>('timezone'); const timezoneOptions = byId('timezone-options'); let activeTimezone = -1; let visibleTimezones: TimezoneId[] = [];
+  const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };
+  const chooseTimezone = (timezone: TimezoneId) => {
+    if (!isTimezoneSupported(timezone)) { byId('timezone-error').textContent = 'This timezone is not supported by the current browser. Choose another timezone.'; closeTimezoneOptions(); return; }
+    config.timezone = timezone; timezoneInput.value = timezone; byId('timezone-error').textContent = ''; byId<HTMLSelectElement>('preset').value = 'Custom'; closeTimezoneOptions(); refresh();
+  };
+  const showTimezoneOptions = (query: string) => {
+    const descriptions = searchTimezones(query); visibleTimezones = descriptions.map(({ id }) => id); activeTimezone = -1; timezoneInput.removeAttribute('aria-activedescendant'); timezoneOptions.replaceChildren();
+    descriptions.forEach((description, index) => { const item = element('div', { id: `timezone-option-${index}`, role: 'option', class: 'timezone-option', 'aria-selected': 'false' }, description.display); item.addEventListener('mousedown', (event) => { event.preventDefault(); chooseTimezone(description.id); }); timezoneOptions.append(item); });
+    timezoneInput.setAttribute('aria-expanded', String(descriptions.length > 0));
+  };
+  const validateTimezoneInput = () => {
+    const candidate = timezoneInput.value.trim();
+    if (!isCatalogTimezone(candidate)) { byId('timezone-error').textContent = 'Choose a timezone from the canonical timezone list.'; closeTimezoneOptions(); return; }
+    chooseTimezone(candidate);
+  };
+  timezoneInput.addEventListener('input', () => { byId('timezone-error').textContent = ''; showTimezoneOptions(timezoneInput.value); });
+  timezoneInput.addEventListener('change', validateTimezoneInput);
+  timezoneInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') { closeTimezoneOptions(); return; }
+    if (event.key === 'Enter') { event.preventDefault(); if (activeTimezone >= 0) chooseTimezone(visibleTimezones[activeTimezone]!); else validateTimezoneInput(); return; }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault(); if (!visibleTimezones.length) showTimezoneOptions(timezoneInput.value); if (!visibleTimezones.length) return;
+    activeTimezone = event.key === 'ArrowDown' ? Math.min(activeTimezone + 1, visibleTimezones.length - 1) : Math.max(activeTimezone - 1, 0);
+    Array.from(timezoneOptions.children).forEach((child, index) => child.setAttribute('aria-selected', String(index === activeTimezone)));
+    const activeOption = timezoneOptions.children[activeTimezone] as HTMLElement | undefined;
+    if (activeOption && typeof activeOption.scrollIntoView === 'function') activeOption.scrollIntoView({ block: 'nearest' });
+    timezoneInput.setAttribute('aria-activedescendant', `timezone-option-${activeTimezone}`);
+  });
+  timezoneInput.addEventListener('focus', () => showTimezoneOptions(timezoneInput.value === config.timezone ? '' : timezoneInput.value));
+  timezoneInput.addEventListener('blur', () => { window.setTimeout(() => { if (document.activeElement !== timezoneInput) closeTimezoneOptions(); }, 0); });
   const lineControl = (n: number, field: keyof ClockLine, parse: (control: HTMLInputElement | HTMLSelectElement) => unknown) => { const control = byId<HTMLInputElement | HTMLSelectElement>(`line${n}-${field}`); const event = control instanceof HTMLInputElement && ['text','number','range'].includes(control.type) ? 'input' : 'change'; control.addEventListener(event, () => {
     if (!control.validity.valid) return;
     if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; }
@@ -76,7 +114,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   }); };
   [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
     byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; refresh(); } }); });
-  (['timezone','locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
+  (['locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
   (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { const control = event.target as HTMLInputElement; if (!control.validity.valid) return; config[key] = Number(control.value); refresh(); }));
   byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = cloneClockConfig(chosen); sync(); refresh(); } });
   byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });

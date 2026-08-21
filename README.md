@@ -34,6 +34,12 @@ The fragment is readable, not encrypted. It contains visual settings only and is
 
 `HH H h mm m ss s a`, `dddd ddd`, `MMMM MMM M`, `D`, `YYYY YY`. Wrap literal text in single quotes.
 
+## Timezones
+
+The editor includes a keyboard-accessible searchable catalog of canonical IANA timezone IDs. Search by city, region, ID, or UTC offset; results show a friendly city label, the canonical ID stored in the URL, and the current calculated UTC offset. **Local** and **UTC** remain first. Existing `/v1/clock/#v=1&tz=...` URLs are unchanged.
+
+The catalog is generated from the system IANA tzdata `zone.tab`, committed in `src/timezones/generated.ts`, and requires no runtime network request or dependency. Regenerate on a host with tzdata using `npm run generate:timezones`. Linked aliases such as `US/Eastern`, malformed IDs, and arbitrary strings are rejected. The editor also verifies the selected ID against the browser's actual `Intl` data; an older OBS/CEF runtime missing a catalog zone displays a safe error instead of crashing.
+
 ## Fonts and licensing
 
 Inter, Montserrat, and Roboto Mono are bundled at build time from Fontsource under the SIL Open Font License 1.1. See `THIRD_PARTY_NOTICES.md`. System fallbacks remain available.
