@@ -7,6 +7,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       input: {
+        home: resolve(__dirname, 'index.html'),
         editor: resolve(__dirname, 'editor/index.html'),
         clock: resolve(__dirname, 'v1/clock/index.html'),
       },

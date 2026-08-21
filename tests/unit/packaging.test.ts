@@ -1,9 +1,14 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(path, 'utf8');
 
 describe('deployment packaging', () => {
+  it('ships a root entry that forwards visitors to the editor', () => {
+    expect(existsSync('index.html')).toBe(true);
+    if (existsSync('index.html')) expect(read('index.html')).toContain('url=/editor/');
+  });
+
   it('uses Cloudflare-supported hash syntax for the headers comment', () => {
     expect(read('public/_headers').split('\n')[0]).toMatch(/^#/);
   });
