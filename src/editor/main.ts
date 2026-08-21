@@ -1,0 +1,85 @@
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/montserrat/latin-400.css';
+import '@fontsource/montserrat/latin-500.css';
+import '@fontsource/montserrat/latin-700.css';
+import '@fontsource/roboto-mono/latin-400.css';
+import '@fontsource/roboto-mono/latin-500.css';
+import '@fontsource/roboto-mono/latin-700.css';
+import '../styles/base.css';
+import '../styles/editor.css';
+import '../styles/clock.css';
+import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
+import { DEFAULT_CONFIG, FONT_IDS, LOCALES, TIMEZONES, type ClockLine } from '../config/defaults';
+import { PRESETS } from '../config/presets';
+import { renderClock } from '../clock/renderer';
+import { validateFormat } from '../time/format';
+
+const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
+  const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
+};
+const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
+const option = (value: string, label = value) => element('option', { value }, label);
+const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
+const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
+
+function buildLine(parent: HTMLElement, n: number) {
+  const section = element('fieldset'); section.append(element('legend', {}, `Line ${n}`));
+  const enabled = input(`line${n}-enabled`, 'checkbox'); labeled(section, 'Enabled', enabled);
+  const presets = select(`line${n}-format-preset`, ['', 'HH:mm:ss', 'h:mm a', 'dddd, MMMM D, YYYY', "HH:mm 'UTC'"]); presets.options[0]!.text = 'Custom'; labeled(section, 'Format preset', presets);
+  const format = input(`line${n}-format`, 'text'); format.maxLength = 64; format.setAttribute('aria-describedby', `line${n}-error token-help`); labeled(section, 'Format', format);
+  section.append(element('p', { id: `line${n}-error`, class: 'error', role: 'alert' }));
+  labeled(section, 'Font', select(`line${n}-font`, FONT_IDS)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));
+  labeled(section, 'Weight', select(`line${n}-weight`, ['400','500','600','700'])); labeled(section, 'Color', input(`line${n}-color`, 'color'));
+  labeled(section, 'Opacity', input(`line${n}-opacity`, 'range', 0, 1, .05)); labeled(section, 'Transform', select(`line${n}-transform`, ['none','uppercase','lowercase'])); parent.append(section);
+}
+
+function buildEditor(app: HTMLElement) {
+  const header = element('header'); header.append(element('p', { class: 'eyebrow' }, 'OBS BROWSER SOURCE'), element('h1', {}, 'Clock Overlay Studio'), element('p', {}, 'Design a transparent two-line clock, then copy its permanent URL into OBS.'));
+  const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
+  const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
+  const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset); labeled(global, 'Timezone', select('timezone', TIMEZONES)); labeled(global, 'Locale', select('locale', LOCALES));
+  labeled(global, 'Alignment', select('align', ['left','center','right'])); labeled(global, 'Line gap', input('gap', 'number', 0, 80)); labeled(global, 'Stroke', input('stroke', 'number', 0, 8)); labeled(global, 'Shadow', input('shadow', 'number', 0, 30)); panel.append(global);
+  buildLine(panel, 1); buildLine(panel, 2); panel.append(element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
+  const output = element('fieldset'); output.append(element('legend', {}, 'Output')); const url = input('obs-url', 'text'); url.readOnly = true; labeled(output, 'OBS URL', url);
+  const actions = element('div', { class: 'actions' }); actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy OBS URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy setup text'), element('button', { id: 'open-preview', type: 'button' }, 'Open widget preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'));
+  output.append(actions, element('p', { id: 'copy-status', role: 'status', 'aria-live': 'polite' }), element('p', { id: 'url-warning', class: 'warning' })); panel.append(output);
+  const help = element('section', { class: 'instructions' }); help.append(element('h2', {}, 'Add to OBS'), element('ol'));
+  const steps = ['Sources → + → Browser; create “Stream Clock”.','Paste the generated URL.','Use 1920 × 300 (or 800 × 240 for compact presets).','Leave custom CSS empty.','Leave “Shutdown source when not visible” and “Refresh browser when scene becomes active” off for uninterrupted operation.']; steps.forEach((step) => help.querySelector('ol')!.append(element('li', {}, step)));
+  help.append(element('p', { class: 'privacy' }, 'Anyone with this URL can view its visual settings. Do not enter secrets or personal information. No settings are stored or tracked.')); panel.append(help);
+  const previewPanel = element('section', { class: 'preview-panel', 'aria-label': 'Live preview' }); const previewHead = element('div', { class: 'preview-head' });
+  const backdrop = select('backdrop', ['checkerboard','dark','light']); backdrop.setAttribute('aria-label', 'Preview backdrop'); previewHead.append(element('h2', {}, 'Live preview'), backdrop);
+  const stage = element('div', { id: 'preview-stage', class: 'preview-stage checkerboard' }); stage.append(element('div', { id: 'preview-root' })); previewPanel.append(previewHead, stage, element('p', { id: 'empty-warning', class: 'warning' }));
+  layout.append(panel, previewPanel); app.append(header, layout);
+}
+
+export function initEditor(app: HTMLElement): { destroy: () => void } {
+  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : structuredClone(DEFAULT_CONFIG); let clock: ReturnType<typeof renderClock> | undefined;
+  const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
+  const sync = () => {
+    byId<HTMLSelectElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
+    byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
+    config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format;
+      byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); byId<HTMLSelectElement>(`line${n}-weight`).value = String(line.weight);
+      byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
+  };
+  const refresh = () => { clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.'; };
+  const lineControl = (n: number, field: keyof ClockLine, parse: (control: HTMLInputElement | HTMLSelectElement) => unknown) => { const control = byId<HTMLInputElement | HTMLSelectElement>(`line${n}-${field}`); const event = control instanceof HTMLInputElement && ['text','number','range'].includes(control.type) ? 'input' : 'change'; control.addEventListener(event, () => {
+    if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; }
+    (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+  }); };
+  [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
+    byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; refresh(); } }); });
+  (['timezone','locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
+  (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { config[key] = Number((event.target as HTMLInputElement).value); refresh(); }));
+  byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = structuredClone(chosen); sync(); refresh(); } });
+  byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });
+  byId('reset').addEventListener('click', () => { config = structuredClone(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
+  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
+  byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: 1920 × 300\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
+  byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
+  sync(); refresh(); return { destroy: () => clock?.stop() };
+}
+
+const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);

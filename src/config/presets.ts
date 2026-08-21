@@ -1,0 +1,21 @@
+import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
+
+const withChanges = (changes: Partial<ClockConfig> & { lines?: ClockConfig['lines'] }): ClockConfig => ({ ...structuredClone(DEFAULT_CONFIG), ...changes });
+export const PRESETS: Record<string, ClockConfig> = {
+  Minimal: withChanges({ gap: 0, shadow: 0, lines: [
+    { ...DEFAULT_CONFIG.lines[0], format: 'HH:mm', size: 88, weight: 500 },
+    { ...DEFAULT_CONFIG.lines[1], enabled: false },
+  ] }),
+  Broadcast: withChanges({ align: 'left', gap: 10, stroke: 2, shadow: 6, lines: [
+    { ...DEFAULT_CONFIG.lines[0], size: 96 },
+    { ...DEFAULT_CONFIG.lines[1], format: 'dddd, MMMM D, YYYY', size: 34 },
+  ] }),
+  Retro: withChanges({ gap: 4, shadow: 8, lines: [
+    { ...DEFAULT_CONFIG.lines[0], font: 'retro', size: 84, color: '#FFB000' },
+    { ...DEFAULT_CONFIG.lines[1], font: 'mono', color: '#FFB000', transform: 'uppercase' },
+  ] }),
+  Puzzlr: withChanges({ gap: 12, stroke: 1, shadow: 8, lines: [
+    { ...DEFAULT_CONFIG.lines[0], font: 'display', size: 92, color: '#7C5CFC' },
+    { ...DEFAULT_CONFIG.lines[1], font: 'display', size: 32, color: '#35D7B7', transform: 'uppercase' },
+  ] }),
+};
