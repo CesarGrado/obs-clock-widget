@@ -19,15 +19,17 @@ export function validateFormat(format: string): string | null { const result = l
 export function formatClock(date: Date, format: string, timezone: string, locale: string): string {
   const parsed = lex(format); if (typeof parsed === 'string') throw new Error(parsed);
   const lang = locale === 'auto' ? undefined : locale; const timeZone = timezone === 'local' ? undefined : timezone;
-  const parts = new Intl.DateTimeFormat(lang, { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'long', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date);
-  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? '';
-  const name = (month: 'long' | 'short' | undefined, weekday: 'long' | 'short' | undefined) => new Intl.DateTimeFormat(lang, { timeZone, month, weekday }).format(date);
-  const h24 = Number(get('hour')); const hour12 = h24 % 12 || 12;
+  const parts = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+  const getNumber = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? '');
+  const localizedNumber = (value: number, minimumIntegerDigits = 1) => new Intl.NumberFormat(lang, { useGrouping: false, minimumIntegerDigits, maximumFractionDigits: 0 }).format(value);
+  const name = (month: 'long' | 'short' | undefined, weekday: 'long' | 'short' | undefined) => new Intl.DateTimeFormat(lang, { timeZone, calendar: 'gregory', month, weekday }).format(date);
+  const year = getNumber('year'); const month = getNumber('month'); const day = getNumber('day');
+  const h24 = getNumber('hour'); const hour12 = h24 % 12 || 12; const minute = getNumber('minute'); const second = getNumber('second');
   const values: Record<string, string> = {
-    YYYY: get('year'), YY: get('year').slice(-2), MMMM: name('long', undefined), MMM: name('short', undefined), M: String(Number(get('month'))),
-    D: String(Number(get('day'))), dddd: name(undefined, 'long'), ddd: name(undefined, 'short'), HH: String(h24).padStart(2, '0'), H: String(h24),
-    hh: String(hour12).padStart(2, '0'), h: String(hour12), mm: get('minute'), m: String(Number(get('minute'))), ss: get('second'), s: String(Number(get('second'))),
-    a: new Intl.DateTimeFormat(lang, { timeZone, hour: 'numeric', hour12: true }).formatToParts(date).find((part) => part.type === 'dayPeriod')?.value ?? (h24 < 12 ? 'AM' : 'PM'),
+    YYYY: localizedNumber(year, 4), YY: localizedNumber(year % 100, 2), MMMM: name('long', undefined), MMM: name('short', undefined), M: localizedNumber(month),
+    D: localizedNumber(day), dddd: name(undefined, 'long'), ddd: name(undefined, 'short'), HH: localizedNumber(h24, 2), H: localizedNumber(h24),
+    hh: localizedNumber(hour12, 2), h: localizedNumber(hour12), mm: localizedNumber(minute, 2), m: localizedNumber(minute), ss: localizedNumber(second, 2), s: localizedNumber(second),
+    a: new Intl.DateTimeFormat(lang, { timeZone, calendar: 'gregory', hour: 'numeric', hour12: true }).formatToParts(date).find((part) => part.type === 'dayPeriod')?.value ?? (h24 < 12 ? 'AM' : 'PM'),
   };
   return parsed.map((part) => part.token && tokenSet.has(part.value) ? values[part.value] : part.value).join('');
 }

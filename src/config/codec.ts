@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
+import { cloneClockConfig } from './clone';
 import { normalizeConfig } from './schema';
 
 const keys = ['v','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
@@ -21,12 +22,12 @@ export function encodeConfig(value: ClockConfig): string {
 export function decodeConfig(fragment: string): ClockConfig {
   try {
     const raw = fragment.replace(/^#/, '');
-    if (new TextEncoder().encode(raw).length > 2048) return structuredClone(DEFAULT_CONFIG);
+    if (new TextEncoder().encode(raw).length > 2048) return cloneClockConfig(DEFAULT_CONFIG);
     decodeURIComponent(raw.replace(/\+/g, '%20'));
     const p = new URLSearchParams(raw); const seen = new Set<string>();
-    for (const [key] of p) { if (!allowed.has(key) || seen.has(key) || ['__proto__','constructor','prototype'].includes(key)) return structuredClone(DEFAULT_CONFIG); seen.add(key); }
-    if (p.get('v') !== '1') return structuredClone(DEFAULT_CONFIG);
-    const c = structuredClone(DEFAULT_CONFIG) as ClockConfig;
+    for (const [key] of p) { if (!allowed.has(key) || seen.has(key) || ['__proto__','constructor','prototype'].includes(key)) return cloneClockConfig(DEFAULT_CONFIG); seen.add(key); }
+    if (p.get('v') !== '1') return cloneClockConfig(DEFAULT_CONFIG);
+    const c = cloneClockConfig(DEFAULT_CONFIG);
     if (p.has('tz')) c.timezone = p.get('tz') as ClockConfig['timezone']; if (p.has('loc')) c.locale = p.get('loc') as ClockConfig['locale'];
     if (p.has('a')) c.align = p.get('a') as ClockConfig['align'];
     const numeric = (key: string, fallback: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(rawValue)) throw new Error('Invalid number'); return Number(rawValue); };
@@ -38,7 +39,17 @@ export function decodeConfig(fragment: string): ClockConfig {
       line.opacity = numeric(`o${n}`, line.opacity); if (p.has(`tr${n}`)) line.transform = p.get(`tr${n}`) as typeof line.transform;
     });
     return normalizeConfig(c);
-  } catch { return structuredClone(DEFAULT_CONFIG); }
+  } catch { return cloneClockConfig(DEFAULT_CONFIG); }
+}
+
+export function hasUnsupportedConfigVersion(fragment: string): boolean {
+  try {
+    const raw = fragment.replace(/^#/, '');
+    if (new TextEncoder().encode(raw).length > 2048) return false;
+    decodeURIComponent(raw.replace(/\+/g, '%20'));
+    const versions = new URLSearchParams(raw).getAll('v');
+    return versions.length === 1 && /^\d+$/.test(versions[0]!) && versions[0] !== '1';
+  } catch { return false; }
 }
 
 export const widgetUrl = (config: ClockConfig, origin = window.location.origin): string => `${origin.replace(/\/$/, '')}/v1/clock/#${encodeConfig(config)}`;

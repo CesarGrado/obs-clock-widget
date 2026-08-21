@@ -1,17 +1,21 @@
 import '@fontsource/inter/latin-400.css';
 import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
 import '@fontsource/inter/latin-700.css';
 import '@fontsource/montserrat/latin-400.css';
 import '@fontsource/montserrat/latin-500.css';
+import '@fontsource/montserrat/latin-600.css';
 import '@fontsource/montserrat/latin-700.css';
 import '@fontsource/roboto-mono/latin-400.css';
 import '@fontsource/roboto-mono/latin-500.css';
+import '@fontsource/roboto-mono/latin-600.css';
 import '@fontsource/roboto-mono/latin-700.css';
 import '../styles/base.css';
 import '../styles/editor.css';
 import '../styles/clock.css';
 import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
 import { DEFAULT_CONFIG, FONT_IDS, LOCALES, TIMEZONES, type ClockLine } from '../config/defaults';
+import { cloneClockConfig } from '../config/clone';
 import { PRESETS } from '../config/presets';
 import { renderClock } from '../clock/renderer';
 import { validateFormat } from '../time/format';
@@ -22,7 +26,7 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<st
 const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
 const option = (value: string, label = value) => element('option', { value }, label);
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
-const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
+const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
 
 function buildLine(parent: HTMLElement, n: number) {
   const section = element('fieldset'); section.append(element('legend', {}, `Line ${n}`));
@@ -55,7 +59,7 @@ function buildEditor(app: HTMLElement) {
 }
 
 export function initEditor(app: HTMLElement): { destroy: () => void } {
-  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : structuredClone(DEFAULT_CONFIG); let clock: ReturnType<typeof renderClock> | undefined;
+  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let clock: ReturnType<typeof renderClock> | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const sync = () => {
     byId<HTMLSelectElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
@@ -66,16 +70,17 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   };
   const refresh = () => { clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.'; };
   const lineControl = (n: number, field: keyof ClockLine, parse: (control: HTMLInputElement | HTMLSelectElement) => unknown) => { const control = byId<HTMLInputElement | HTMLSelectElement>(`line${n}-${field}`); const event = control instanceof HTMLInputElement && ['text','number','range'].includes(control.type) ? 'input' : 'change'; control.addEventListener(event, () => {
+    if (!control.validity.valid) return;
     if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; }
     (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   }); };
   [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
     byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; refresh(); } }); });
   (['timezone','locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
-  (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { config[key] = Number((event.target as HTMLInputElement).value); refresh(); }));
-  byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = structuredClone(chosen); sync(); refresh(); } });
+  (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { const control = event.target as HTMLInputElement; if (!control.validity.valid) return; config[key] = Number(control.value); refresh(); }));
+  byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = cloneClockConfig(chosen); sync(); refresh(); } });
   byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });
-  byId('reset').addEventListener('click', () => { config = structuredClone(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
+  byId('reset').addEventListener('click', () => { config = cloneClockConfig(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: 1920 × 300\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));

@@ -1,4 +1,6 @@
 import { DEFAULT_CONFIG, FONT_IDS, LOCALES, TIMEZONES, type ClockConfig, type ClockLine } from './defaults';
+import { cloneClockConfig } from './clone';
+import { validateFormat } from '../time/format';
 
 const color = /^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$/;
 const formats = /^[A-Za-z0-9 :,.'\-/]+$/;
@@ -8,7 +10,7 @@ const inList = <T extends readonly unknown[]>(list: T, value: unknown): value is
 function validLine(value: unknown): value is ClockLine {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const line = value as Record<string, unknown>;
-  return typeof line.enabled === 'boolean' && typeof line.format === 'string' && line.format.length > 0 && line.format.length <= 64 && formats.test(line.format)
+  return typeof line.enabled === 'boolean' && typeof line.format === 'string' && line.format.length > 0 && line.format.length <= 64 && formats.test(line.format) && validateFormat(line.format) === null
     && inList(FONT_IDS, line.font) && typeof line.size === 'number' && Number.isFinite(line.size) && line.size >= 10 && line.size <= 240
     && inList([400, 500, 600, 700] as const, line.weight) && typeof line.color === 'string' && color.test(line.color)
     && typeof line.opacity === 'number' && Number.isFinite(line.opacity) && line.opacity >= 0 && line.opacity <= 1
@@ -16,13 +18,13 @@ function validLine(value: unknown): value is ClockLine {
 }
 
 export function normalizeConfig(input: unknown): ClockConfig {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return structuredClone(DEFAULT_CONFIG);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return cloneClockConfig(DEFAULT_CONFIG);
   const value = input as Record<string, unknown>;
   if (own(value, '__proto__') || own(value, 'constructor') || own(value, 'prototype') || value.version !== 1
     || !inList(TIMEZONES, value.timezone) || !inList(LOCALES, value.locale) || !inList(['left', 'center', 'right'] as const, value.align)
     || typeof value.gap !== 'number' || !Number.isFinite(value.gap) || value.gap < 0 || value.gap > 80
     || typeof value.stroke !== 'number' || !Number.isFinite(value.stroke) || value.stroke < 0 || value.stroke > 8
     || typeof value.shadow !== 'number' || !Number.isFinite(value.shadow) || value.shadow < 0 || value.shadow > 30
-    || !Array.isArray(value.lines) || value.lines.length !== 2 || !value.lines.every(validLine)) return structuredClone(DEFAULT_CONFIG);
-  return structuredClone(value) as ClockConfig;
+    || !Array.isArray(value.lines) || value.lines.length !== 2 || !value.lines.every(validLine)) return cloneClockConfig(DEFAULT_CONFIG);
+  return cloneClockConfig(value as ClockConfig);
 }

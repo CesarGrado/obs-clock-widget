@@ -21,6 +21,28 @@ describe('clock editor', () => {
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));
     expect(app.querySelector('#line1-error')?.textContent).toContain('Unsupported'); expect(app.querySelector('#preview-root')?.textContent).toBe(before); editor.destroy();
   });
+  it('rejects empty global numeric controls without changing preview or URL', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const gap = app.querySelector<HTMLInputElement>('#gap')!;
+    const beforeUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    const beforeGap = (app.querySelector('.clock-content') as HTMLElement).style.gap;
+    gap.value = ''; gap.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(gap.validity.valid).toBe(false);
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
+    expect((app.querySelector('.clock-content') as HTMLElement).style.gap).toBe(beforeGap);
+    editor.destroy();
+  });
+  it('rejects out-of-range line numeric controls without changing preview or URL', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const size = app.querySelector<HTMLInputElement>('#line1-size')!;
+    const beforeUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    const beforeSize = (app.querySelector('.clock-line') as HTMLElement).style.fontSize;
+    size.value = '241'; size.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(size.validity.valid).toBe(false);
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
+    expect((app.querySelector('.clock-line') as HTMLElement).style.fontSize).toBe(beforeSize);
+    editor.destroy();
+  });
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();

@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
+import { cloneClockConfig } from './clone';
 
-const withChanges = (changes: Partial<ClockConfig> & { lines?: ClockConfig['lines'] }): ClockConfig => ({ ...structuredClone(DEFAULT_CONFIG), ...changes });
+const withChanges = (changes: Partial<ClockConfig> & { lines?: ClockConfig['lines'] }): ClockConfig => ({ ...cloneClockConfig(DEFAULT_CONFIG), ...changes });
 export const PRESETS: Record<string, ClockConfig> = {
   Minimal: withChanges({ gap: 0, shadow: 0, lines: [
     { ...DEFAULT_CONFIG.lines[0], format: 'HH:mm', size: 88, weight: 500 },

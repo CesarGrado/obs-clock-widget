@@ -1,4 +1,4 @@
-/* Cloudflare Pages headers. The widget is intentionally embeddable/top-level for OBS. */
+# Cloudflare Pages headers. The widget is intentionally embeddable/top-level for OBS.
 /*
   Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'; media-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors *
   X-Content-Type-Options: nosniff

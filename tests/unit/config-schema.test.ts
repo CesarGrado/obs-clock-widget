@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/defaults';
+import { cloneClockConfig } from '../../src/config/clone';
 import { normalizeConfig } from '../../src/config/schema';
 
 describe('configuration schema', () => {
@@ -19,6 +20,11 @@ describe('configuration schema', () => {
     ] });
     expect(value.align).toBe('left');
     expect(value.lines[0]?.font).toBe('mono');
+  });
+  it('rejects line formats that the clock formatter cannot lex', () => {
+    const invalid = cloneClockConfig(DEFAULT_CONFIG);
+    invalid.lines[0].format = 'HH:mm X';
+    expect(normalizeConfig(invalid)).toEqual(DEFAULT_CONFIG);
   });
   it('rejects unsupported major versions', () => expect(normalizeConfig({ ...DEFAULT_CONFIG, version: 2 })).toEqual(DEFAULT_CONFIG));
 });
