@@ -145,3 +145,34 @@ test('editor is accessible and has no narrow viewport overflow', async ({ page }
   const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+test('font library offers grouped fonts with per-font weight filtering', async ({ page }) => {
+  await page.goto('/editor/');
+  const fontSelect = page.locator('#line1-font');
+  const optionCount = await fontSelect.locator('option').count();
+  expect(optionCount).toBeGreaterThan(30);
+  const groupCount = await fontSelect.locator('optgroup').count();
+  expect(groupCount).toBeGreaterThanOrEqual(5);
+  await fontSelect.selectOption('bebas-neue');
+  const weightOptions = await page.locator('#line1-weight option').allTextContents();
+  expect(weightOptions).toEqual(['400']);
+  await page.locator('#line1-weight').selectOption('400');
+  expect(await page.locator('#obs-url').inputValue()).toContain('ft1=bebas-neue');
+});
+
+test('runtime renders a library font without console errors or external requests', async ({ page }) => {
+  const errors: string[] = []; const unexpected: string[] = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('request', (request) => { if (new URL(request.url()).origin !== 'http://127.0.0.1:4173') unexpected.push(request.url()); });
+  await page.goto('/v1/clock/#v=1&ft1=permanent-marker&f1=HH%3Amm');
+  await expect(page.locator('.clock-line')).toHaveCount(2);
+  await expect(page.locator('.clock-line').first()).toHaveCSS('font-family', /Permanent Marker/);
+  await page.evaluate(() => (document as Document & { fonts: { ready: Promise<void> } }).fonts.ready);
+  expect(errors).toEqual([]); expect(unexpected).toEqual([]);
+});
+
+test('legacy font URLs keep their exact stacks', async ({ page }) => {
+  await page.goto('/v1/clock/#v=1&ft1=retro');
+  await expect(page.locator('.clock-line').first()).toHaveCSS('font-family', /Roboto Mono/);
+});

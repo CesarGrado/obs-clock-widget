@@ -24,7 +24,7 @@ export const PRESETS: Record<string, ClockConfig> = {
     { ...DEFAULT_CONFIG.lines[1], font: 'display', size: 32, color: '#35D7B7', transform: 'uppercase' },
   ] }),
   'Stream Start': withChanges({ gap: 10, shadow: 6, lines: [
-    { ...DEFAULT_CONFIG.lines[0], format: "h:mm a '— stream starts soon'", font: 'permanent-marker', size: 64, weight: 400 },
+    { ...DEFAULT_CONFIG.lines[0], format: "h:mm a '-- stream starts soon'", font: 'permanent-marker', size: 64, weight: 400 },
     { ...DEFAULT_CONFIG.lines[1], format: 'dddd, MMMM D', font: 'caveat', size: 34, weight: 600, opacity: 0.9 },
   ] }),
 };
