@@ -80,6 +80,17 @@ test('timezone picker remains accessible without narrow viewport overflow', asyn
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('copies setup instructions with the selected compact Browser Source size', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.getByRole('button', { name: 'Copy setup text' }).click();
+  await expect(page.locator('#copy-status')).toHaveText('Setup text copied.');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).toContain('Size: 800 × 240');
+  expect(copied).toContain('/v1/clock/#v=1');
+});
+
 test('editor is accessible and has no narrow viewport overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
   const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);

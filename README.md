@@ -28,6 +28,8 @@ npm run test:e2e
 4. Leave custom CSS empty.
 5. Leave **Shutdown source when not visible** and **Refresh browser when scene becomes active** off for uninterrupted operation.
 
+Choose the matching **OBS Browser Source size** in the editor before selecting **Copy setup text**. The copied checklist includes either the wide `1920 × 300` or compact `800 × 240` dimensions, so the source can be recreated without retyping them.
+
 The fragment is readable, not encrypted. It contains visual settings only and is not sent to the static host. The app uses no account, cookies, storage, analytics, telemetry, service worker, or third-party runtime network calls.
 
 ### Presets

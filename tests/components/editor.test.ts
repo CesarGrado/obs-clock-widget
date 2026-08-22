@@ -197,6 +197,19 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('copies setup text with the selected OBS Browser Source size', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const size = app.querySelector<HTMLSelectElement>('#obs-size')!;
+    expect(Array.from(size.options).map(({ value }) => value)).toEqual(['1920 × 300', '800 × 240']);
+    size.value = '800 × 240'; size.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-setup') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Size: 800 × 240')));
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Setup text copied.');
+    editor.destroy();
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();
