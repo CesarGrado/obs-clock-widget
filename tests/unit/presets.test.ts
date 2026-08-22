@@ -5,6 +5,9 @@ describe('clock presets', () => {
   it('defines the revised Minimal preset exactly for a stable single-line clock', () => {
     expect(PRESETS.Minimal).toEqual({
       version: 1,
+      mode: 'clock',
+      countdownTarget: '',
+      overtime: false,
       timezone: 'local',
       locale: 'auto',
       align: 'center',
@@ -39,6 +42,9 @@ describe('clock presets', () => {
   it('defines the Gameplay preset exactly for high-contrast moving backgrounds', () => {
     expect(PRESETS.Gameplay).toEqual({
       version: 1,
+      mode: 'clock',
+      countdownTarget: '',
+      overtime: false,
       timezone: 'local',
       locale: 'auto',
       align: 'center',

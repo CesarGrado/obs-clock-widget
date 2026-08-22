@@ -21,6 +21,7 @@ import { PRESETS } from '../config/presets';
 import { renderClock } from '../clock/renderer';
 import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
+import { isAbsoluteIsoTarget } from '../time/countdown';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -58,6 +59,13 @@ function buildEditor(app: HTMLElement) {
   const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
   const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
   const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset);
+  labeled(global, 'Mode', select('mode', ['clock','countdown']));
+  const countdownControls = element('div', { id: 'countdown-controls' });
+  const target = input('countdown-target', 'text'); target.maxLength = 32; target.placeholder = '2026-08-23T18:30:00Z'; target.setAttribute('aria-describedby', 'countdown-help countdown-error resolved-target');
+  labeled(countdownControls, 'Target (ISO 8601)', target);
+  countdownControls.append(element('p', { id: 'countdown-help', class: 'help' }, 'Use an absolute time ending in Z or an explicit offset, up to 99 days ahead.'), element('p', { id: 'countdown-error', class: 'error', role: 'alert' }));
+  const overtime = input('overtime', 'checkbox'); labeled(countdownControls, 'Count up after zero (overtime)', overtime);
+  countdownControls.append(element('p', { id: 'resolved-target', class: 'help', 'aria-live': 'polite' })); global.append(countdownControls);
   const timezoneWrap = element('div', { class: 'timezone-picker' });
   const timezone = input('timezone', 'text');
   timezone.setAttribute('role', 'combobox'); timezone.setAttribute('autocomplete', 'off'); timezone.setAttribute('aria-autocomplete', 'list'); timezone.setAttribute('aria-controls', 'timezone-options'); timezone.setAttribute('aria-expanded', 'false'); timezone.setAttribute('aria-describedby', 'timezone-help timezone-error');
@@ -88,14 +96,32 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const syncFormatPreset = (n: number, format: string) => { const preset = byId<HTMLSelectElement>(`line${n}-format-preset`); preset.value = Array.from(preset.options).some(({ value }) => value === format) ? format : ''; };
   const sync = () => {
+    byId<HTMLSelectElement>('mode').value = config.mode; byId<HTMLInputElement>('countdown-target').value = config.countdownTarget; byId<HTMLInputElement>('overtime').checked = config.overtime; byId('countdown-controls').hidden = config.mode !== 'countdown';
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); byId<HTMLSelectElement>(`line${n}-weight`).value = String(line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
-  const refresh = () => { clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.'; };
+  const refresh = () => {
+    clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.';
+    const resolved = byId('resolved-target');
+    if (config.mode === 'countdown' && isAbsoluteIsoTarget(config.countdownTarget)) { const lang = config.locale === 'auto' ? undefined : config.locale; const timeZone = config.timezone === 'local' ? undefined : config.timezone; resolved.textContent = `Resolved target: ${new Intl.DateTimeFormat(lang, { dateStyle: 'full', timeStyle: 'long', timeZone }).format(new Date(config.countdownTarget))}`; } else resolved.textContent = '';
+  };
   const timezoneInput = byId<HTMLInputElement>('timezone'); const timezoneOptions = byId('timezone-options'); let activeTimezone = -1; let visibleTimezones: TimezoneId[] = [];
+  byId<HTMLSelectElement>('mode').addEventListener('change', (event) => {
+    config.mode = (event.target as HTMLSelectElement).value as typeof config.mode;
+    if (config.mode === 'countdown' && !config.countdownTarget) config.countdownTarget = new Date(Date.now() + 3_600_000).toISOString().replace('.000Z', 'Z');
+    if (config.mode === 'clock') { config.countdownTarget = ''; config.overtime = false; }
+    byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
+  });
+  byId<HTMLInputElement>('countdown-target').addEventListener('input', (event) => {
+    const value = (event.target as HTMLInputElement).value.trim(); const error = byId('countdown-error');
+    if (!isAbsoluteIsoTarget(value)) { error.textContent = 'Enter an ISO target with an explicit Z or ±HH:mm offset.'; return; }
+    if (Date.parse(value) - Date.now() > 99 * 86_400_000) { error.textContent = 'Choose a target no more than 99 days ahead.'; return; }
+    error.textContent = ''; config.countdownTarget = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+  });
+  byId<HTMLInputElement>('overtime').addEventListener('change', (event) => { config.overtime = (event.target as HTMLInputElement).checked; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); });
   const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };
   const chooseTimezone = (timezone: TimezoneId) => {
     if (!isTimezoneSupported(timezone)) { byId('timezone-error').textContent = 'This timezone is not supported by the current browser. Choose another timezone.'; closeTimezoneOptions(); return; }

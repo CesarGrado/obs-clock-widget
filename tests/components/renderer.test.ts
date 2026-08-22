@@ -16,6 +16,27 @@ describe('safe clock renderer', () => {
     ] as typeof DEFAULT_CONFIG.lines };
     const controller = renderClock(root, config); expect(root.textContent).toBe(''); controller.stop();
   });
+  it('renders countdown on line one and keeps line two as the configured event label', () => {
+    const root = document.createElement('div');
+    const config = { ...DEFAULT_CONFIG, mode: 'countdown' as const, countdownTarget: '2026-08-24T18:30:00Z', lines: [
+      { ...DEFAULT_CONFIG.lines[0] },
+      { ...DEFAULT_CONFIG.lines[1], format: "'Stream starts soon'" },
+    ] as typeof DEFAULT_CONFIG.lines };
+    const controller = renderClock(root, config, () => new Date('2026-08-22T13:15:51Z'));
+    expect(root.querySelectorAll('.clock-line')[0]?.textContent).toBe('2d 05:14:09');
+    expect(root.querySelectorAll('.clock-line')[1]?.textContent).toBe('Stream starts soon');
+    controller.stop();
+  });
+  it('falls back to the normal line-one clock after the five-second zero hold', () => {
+    const root = document.createElement('div');
+    const config = { ...DEFAULT_CONFIG, mode: 'countdown' as const, countdownTarget: '2026-08-22T10:00:00Z' };
+    let instant = new Date('2026-08-22T10:00:04.999Z');
+    const controller = renderClock(root, config, () => instant);
+    expect(root.querySelector('.clock-line')?.textContent).toBe('00:00:00');
+    instant = new Date('2026-08-22T10:00:05.000Z'); controller.update();
+    expect(root.querySelector('.clock-line')?.textContent).toBe('10:00:05');
+    controller.stop();
+  });
   it('fails safely when the runtime Intl data does not support a catalog timezone', () => {
     const Original = Intl.DateTimeFormat;
     vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => {

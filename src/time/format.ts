@@ -21,7 +21,7 @@ export function formatClock(date: Date, format: string, timezone: string, locale
   const lang = locale === 'auto' ? undefined : locale; const timeZone = timezone === 'local' ? undefined : timezone;
   const parts = new Intl.DateTimeFormat('en-US-u-ca-gregory-nu-latn', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(date);
   const getNumber = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value ?? '');
-  const localizedNumber = (value: number, minimumIntegerDigits = 1) => new Intl.NumberFormat(lang, { useGrouping: false, minimumIntegerDigits, maximumFractionDigits: 0 }).format(value);
+  const localizedNumber = (value: number, minimumIntegerDigits = 1) => formatLocalizedNumber(value, lang, minimumIntegerDigits);
   const name = (month: 'long' | 'short' | undefined, weekday: 'long' | 'short' | undefined) => new Intl.DateTimeFormat(lang, { timeZone, calendar: 'gregory', month, weekday }).format(date);
   const year = getNumber('year'); const month = getNumber('month'); const day = getNumber('day');
   const h24 = getNumber('hour'); const hour12 = h24 % 12 || 12; const minute = getNumber('minute'); const second = getNumber('second');
@@ -35,3 +35,9 @@ export function formatClock(date: Date, format: string, timezone: string, locale
 }
 
 export const formatHasSeconds = (format: string): boolean => { const parsed = lex(format); return Array.isArray(parsed) && parsed.some((part) => part.token && (part.value === 's' || part.value === 'ss')); };
+
+export const formatLocalizedNumber = (value: number, locale?: string, minimumIntegerDigits = 1): string => new Intl.NumberFormat(locale, {
+  useGrouping: false,
+  minimumIntegerDigits,
+  maximumFractionDigits: 0,
+}).format(value);

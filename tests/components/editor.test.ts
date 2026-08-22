@@ -10,6 +10,29 @@ describe('clock editor', () => {
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=HH%3Amm');
     expect(app.querySelectorAll('label[for="line1-format"]')).toHaveLength(1); editor.destroy();
   });
+  it('configures an absolute event countdown and displays its resolved target', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const mode = app.querySelector<HTMLSelectElement>('#mode')!; mode.value = 'countdown'; mode.dispatchEvent(new Event('change', { bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = '2026-08-24T18:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    const url = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    expect(url).toContain('m=countdown&ct=2026-08-24T18%3A30%3A00Z');
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('2026');
+    expect(app.querySelector('#preview-root .clock-line')?.textContent).toMatch(/^2d 06:30:/);
+    expect((app.querySelector('#overtime') as HTMLInputElement).checked).toBe(false);
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('rejects naive or targets beyond the 99-day editor limit', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = '2026-08-24T18:30'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('explicit');
+    target.value = '2027-08-24T18:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
+    editor.destroy(); vi.useRealTimers();
+  });
   it('applies presets and resets defaults', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Puzzlr'; preset.dispatchEvent(new Event('change', { bubbles: true }));

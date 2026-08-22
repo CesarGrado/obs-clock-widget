@@ -18,5 +18,17 @@ describe('fragment codec', () => {
   });
   it.each(['v=1&tz=US%2FEastern', 'v=1&tz=Not%2FA_Zone', 'v=1&tz=..%2Fetc%2Fpasswd'])('fails closed for non-canonical timezone fragment %s', (fragment) => expect(decodeConfig(fragment)).toEqual(DEFAULT_CONFIG));
   it('builds a permanent runtime URL', () => expect(widgetUrl(DEFAULT_CONFIG, 'https://clock.test')).toBe('https://clock.test/v1/clock/#v=1'));
+  it('round trips countdown mode with overtime defaulting off', () => {
+    const config = { ...DEFAULT_CONFIG, mode: 'countdown' as const, countdownTarget: '2026-08-23T18:30:00-04:00' };
+    expect(encodeConfig(config)).toBe('v=1&m=countdown&ct=2026-08-23T18%3A30%3A00-04%3A00');
+    expect(decodeConfig(encodeConfig(config))).toEqual(config);
+  });
+  it.each([
+    'v=1&m=countdown&ct=2026-08-23T18%3A30',
+    'v=1&m=countdown&ct=tomorrow',
+    'v=1&m=countdown&ct=2026-08-23T18%3A30Z&ct=2026-08-24T18%3A30Z',
+    'v=1&m=countdown&ct=2026-08-23T18%3A30Z&ot=2',
+  ])('fails safely for invalid countdown fragment %s', (fragment) => expect(decodeConfig(fragment)).toEqual(DEFAULT_CONFIG));
+  it('keeps the legacy canonical fragment byte-identical', () => expect(encodeConfig(decodeConfig('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'))).toBe('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'));
   it('never throws for arbitrary payloads', () => fc.assert(fc.property(fc.string(), (payload) => { expect(() => decodeConfig(payload)).not.toThrow(); }), { numRuns: 200 }));
 });

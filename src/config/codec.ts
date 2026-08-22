@@ -2,13 +2,14 @@ import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
 import { cloneClockConfig } from './clone';
 import { normalizeConfig } from './schema';
 
-const keys = ['v','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
+const keys = ['v','m','ct','ot','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
 const allowed = new Set<string>(keys);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const set = (p: URLSearchParams, key: string, value: unknown, fallback: unknown) => { if (!same(value, fallback)) p.set(key, String(value)); };
 
 export function encodeConfig(value: ClockConfig): string {
   const c = normalizeConfig(value); const p = new URLSearchParams(); p.set('v', '1');
+  set(p, 'm', c.mode, DEFAULT_CONFIG.mode); set(p, 'ct', c.countdownTarget, DEFAULT_CONFIG.countdownTarget); set(p, 'ot', c.overtime ? 1 : 0, 0);
   set(p, 'tz', c.timezone, DEFAULT_CONFIG.timezone); set(p, 'loc', c.locale, DEFAULT_CONFIG.locale); set(p, 'a', c.align, DEFAULT_CONFIG.align);
   set(p, 'gap', c.gap, DEFAULT_CONFIG.gap); set(p, 'st', c.stroke, DEFAULT_CONFIG.stroke); set(p, 'sh', c.shadow, DEFAULT_CONFIG.shadow);
   c.lines.forEach((line, i) => { const n = i + 1; const d = DEFAULT_CONFIG.lines[i]!;
@@ -28,6 +29,8 @@ export function decodeConfig(fragment: string): ClockConfig {
     for (const [key] of p) { if (!allowed.has(key) || seen.has(key) || ['__proto__','constructor','prototype'].includes(key)) return cloneClockConfig(DEFAULT_CONFIG); seen.add(key); }
     if (p.get('v') !== '1') return cloneClockConfig(DEFAULT_CONFIG);
     const c = cloneClockConfig(DEFAULT_CONFIG);
+    if (p.has('m')) c.mode = p.get('m') as ClockConfig['mode']; if (p.has('ct')) c.countdownTarget = p.get('ct')!;
+    if (p.has('ot')) { const overtime = p.get('ot'); if (overtime !== '0' && overtime !== '1') throw new Error('Invalid boolean'); c.overtime = overtime === '1'; }
     if (p.has('tz')) c.timezone = p.get('tz') as ClockConfig['timezone']; if (p.has('loc')) c.locale = p.get('loc') as ClockConfig['locale'];
     if (p.has('a')) c.align = p.get('a') as ClockConfig['align'];
     const numeric = (key: string, fallback: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(rawValue)) throw new Error('Invalid number'); return Number(rawValue); };

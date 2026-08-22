@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG, FONT_IDS, LOCALES, TIMEZONES, type ClockConfig, type ClockLine } from './defaults';
 import { cloneClockConfig } from './clone';
 import { validateFormat } from '../time/format';
+import { isAbsoluteIsoTarget } from '../time/countdown';
 
 const color = /^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$/;
 const formats = /^[A-Za-z0-9 :,.'\-/]+$/;
@@ -21,6 +22,8 @@ export function normalizeConfig(input: unknown): ClockConfig {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return cloneClockConfig(DEFAULT_CONFIG);
   const value = input as Record<string, unknown>;
   if (own(value, '__proto__') || own(value, 'constructor') || own(value, 'prototype') || value.version !== 1
+    || !inList(['clock', 'countdown'] as const, value.mode) || typeof value.countdownTarget !== 'string' || typeof value.overtime !== 'boolean'
+    || (value.mode === 'countdown' && !isAbsoluteIsoTarget(value.countdownTarget)) || (value.mode === 'clock' && value.countdownTarget !== '')
     || !inList(TIMEZONES, value.timezone) || !inList(LOCALES, value.locale) || !inList(['left', 'center', 'right'] as const, value.align)
     || typeof value.gap !== 'number' || !Number.isFinite(value.gap) || value.gap < 0 || value.gap > 80
     || typeof value.stroke !== 'number' || !Number.isFinite(value.stroke) || value.stroke < 0 || value.stroke > 8
