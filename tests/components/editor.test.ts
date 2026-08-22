@@ -52,6 +52,24 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('swaps the two configured lines without changing their styling', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+
+    (app.querySelector('#swap-lines') as HTMLButtonElement).click();
+
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('ddd, MMM D');
+    expect((app.querySelector('#line1-size') as HTMLInputElement).value).toBe('28');
+    expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#ffd54a');
+    expect((app.querySelector('#line1-transform') as HTMLSelectElement).value).toBe('uppercase');
+    expect((app.querySelector('#line2-format') as HTMLInputElement).value).toBe('HH:mm:ss');
+    expect((app.querySelector('#line2-size') as HTMLInputElement).value).toBe('80');
+    expect((app.querySelector('#line2-color') as HTMLInputElement).value).toBe('#ffffff');
+    expect((app.querySelector('#preset') as HTMLSelectElement).value).toBe('Custom');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=ddd%2C+MMM+D');
+    editor.destroy();
+  });
+
   it('rejects invalid formats without replacing the last preview', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app); const before = app.querySelector('#preview-root')?.textContent;
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));

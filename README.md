@@ -36,6 +36,8 @@ The fragment is readable, not encrypted. It contains visual settings only and is
 
 The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting points. **Minimal** is a single-line monospaced `HH:mm` clock with a soft shadow, designed to stay visually steady as digits change without reserving space for a date. **Gameplay** uses a large white clock with a bold black outline and an uppercase yellow date for readability over fast-changing bright and dark footage. Start with a **1920 × 300** or **800 × 240** Browser Source; reduce Gameplay's Stroke if the outline feels heavy at a smaller scale.
 
+Use **Swap lines** to move the complete Line 1 and Line 2 designs—including format, font, color, size, and enabled state—without rebuilding either line.
+
 ### Recover or edit an existing clock
 
 In the editor's **Output** section, paste either the complete generated OBS URL or only its `v=1&...` fragment into **Load existing OBS URL or fragment**, then select **Load** (or press Enter). A successful import replaces the editor settings; change any value and copy the newly generated URL back into OBS.
