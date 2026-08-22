@@ -14,8 +14,8 @@ Quality gates:
 ```bash
 npm run typecheck
 npm run lint
-npm test -- --run
 npm run build
+npm test -- --run
 npx playwright install chromium
 npm run test:e2e
 ```

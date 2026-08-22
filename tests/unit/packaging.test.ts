@@ -56,7 +56,7 @@ describe('deployment packaging', () => {
   });
 
   it('deploys notices and license texts into the built output', () => {
-    expect(existsSync('dist/THIRD_PARTY_NOTICES.md')).toBe(true);
+    expect(existsSync('dist/THIRD_PARTY_NOTICES.md'), 'dist/ is missing — run npm run build before unit tests (see README quality gates)').toBe(true);
     if (existsSync('dist/THIRD_PARTY_NOTICES.md')) {
       expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Inter — Copyright 2016 The Inter Project Authors');
       expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Ubuntu Font Licence 1.0');
@@ -70,6 +70,7 @@ describe('deployment packaging', () => {
 
   it('emits WOFF2 font files only in the built output', () => {
     const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]);
+    expect(existsSync('dist'), 'dist/ is missing — run npm run build before unit tests (see README quality gates)').toBe(true);
     const files = existsSync('dist') ? walk('dist') : [];
     expect(files.filter((file) => file.endsWith('.woff2')).length).toBeGreaterThan(100);
     expect(files.filter((file) => file.endsWith('.woff'))).toEqual([]);
