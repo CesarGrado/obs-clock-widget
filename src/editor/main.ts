@@ -184,6 +184,13 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
     const timeZone = config.timezone === 'local' ? undefined : config.timezone;
     const offsetMs = timeZone ? resolveTimezoneOffsetMs(candidate, timeZone) : -candidate.getTimezoneOffset() * 60_000;
     const absolute = new Date(candidate.getTime() - offsetMs);
+    // DST gap check: the chosen wall time must convert back exactly, or the time does not exist (e.g. 02:30 on spring-forward day).
+    const back = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(absolute);
+    const backGet = (type: string) => Number(back.find((part) => part.type === type)?.value ?? '0');
+    if (backGet('year') !== year || backGet('month') !== month || backGet('day') !== day || backGet('hour') % 24 !== hour || backGet('minute') !== minute) {
+      byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.';
+      return;
+    }
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
     if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time for your countdown.'; return; }
     if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }

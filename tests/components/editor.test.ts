@@ -49,6 +49,55 @@ describe('clock editor', () => {
     expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
     editor.destroy(); vi.useRealTimers();
   });
+  it('rejects a wall time inside the spring-forward DST gap instead of silently shifting it', () => {
+    vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'new york'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(timezone.value).toBe('America/New_York');
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = '2026-03-08'; time.value = '02:30';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('does not exist');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).not.toContain('ct=2026-03-08T');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('resolves the fall-back DST overlap deterministically to the first occurrence', () => {
+    vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'new york'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = '2026-11-01'; time.value = '01:30';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    // Documented behavior: ambiguous fall-back times resolve to the FIRST (daylight) occurrence — 01:30 EDT = 05:30Z.
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ct=2026-11-01T05%3A30%3A00Z');
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('round-trips exact wall times in fractional-offset and normal timezones', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'chatham'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(timezone.value).toBe('Pacific/Chatham');
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = '2026-08-25'; time.value = '14:45';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    // Chatham in August is UTC+12:45, so 14:45 wall = 02:00Z.
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ct=2026-08-25T02%3A00%3A00Z');
+    expect(app.querySelector<HTMLInputElement>('#countdown-time')!.value).toBe('14:45');
+    editor.destroy(); vi.useRealTimers();
+  });
   it('switches post-zero behavior with plain-language radios', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
