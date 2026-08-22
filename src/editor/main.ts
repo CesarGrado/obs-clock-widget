@@ -33,7 +33,7 @@ const input = (id: string, type: string, min?: number, max?: number, step?: numb
 function buildLine(parent: HTMLElement, n: number) {
   const section = element('fieldset'); section.append(element('legend', {}, `Line ${n}`));
   const enabled = input(`line${n}-enabled`, 'checkbox'); labeled(section, 'Enabled', enabled);
-  const presets = select(`line${n}-format-preset`, ['', 'HH:mm:ss', 'h:mm:ss a', 'h:mm a', 'ddd, MMM D', 'dddd, MMMM D, YYYY', "HH:mm 'UTC'"]); presets.options[0]!.text = 'Custom'; labeled(section, 'Format preset', presets);
+  const presets = select(`line${n}-format-preset`, ['', 'HH:mm:ss', 'HH:mm', 'h:mm:ss a', 'h:mm a', 'ddd, MMM D', 'dddd, MMMM D, YYYY', "HH:mm 'UTC'"]); presets.options[0]!.text = 'Custom'; labeled(section, 'Format preset', presets);
   const format = input(`line${n}-format`, 'text'); format.maxLength = 64; format.setAttribute('aria-describedby', `line${n}-error token-help`); labeled(section, 'Format', format);
   section.append(element('p', { id: `line${n}-error`, class: 'error', role: 'alert' }));
   labeled(section, 'Font', select(`line${n}-font`, FONT_IDS)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));

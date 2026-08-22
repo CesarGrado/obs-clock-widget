@@ -159,6 +159,19 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('offers a seconds-free 24-hour format preset', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;
+    expect(Array.from(preset.options).map(({ value }) => value)).toContain('HH:mm');
+
+    preset.value = 'HH:mm'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('HH:mm');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=HH%3Amm');
+    expect(preset.value).toBe('HH:mm');
+    editor.destroy();
+  });
+
   it('offers a compact date format preset', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#line2-format-preset')!;
