@@ -52,6 +52,8 @@ For safety, the editor accepts runtime URLs only from the current deployment ori
 
 `HH H h mm m ss s a`, `dddd ddd`, `MMMM MMM M`, `D`, `YYYY YY`. Wrap literal text in single quotes.
 
+Each line's format presets include both 24-hour and 12-hour clocks with seconds; choose `h:mm:ss a` for an AM/PM clock that keeps seconds visible.
+
 ## Timezones
 
 The editor includes a keyboard-accessible searchable catalog of canonical IANA timezone IDs. Search by city, region, ID, or UTC offset; results show a friendly city label, the canonical ID stored in the URL, and the current calculated UTC offset. **Local** and **UTC** remain first. Existing `/v1/clock/#v=1&tz=...` URLs are unchanged.

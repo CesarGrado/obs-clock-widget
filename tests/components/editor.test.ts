@@ -125,6 +125,18 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('offers a 12-hour format preset with seconds', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;
+    expect(Array.from(preset.options).map(({ value }) => value)).toContain('h:mm:ss a');
+
+    preset.value = 'h:mm:ss a'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('h:mm:ss a');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=h%3Amm%3Ass+a');
+    editor.destroy();
+  });
+
   it('rejects invalid formats without replacing the last preview', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app); const before = app.querySelector('#preview-root')?.textContent;
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));
