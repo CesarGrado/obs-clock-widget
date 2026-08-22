@@ -2,6 +2,40 @@ import { describe, expect, it } from 'vitest';
 import { PRESETS } from '../../src/config/presets';
 
 describe('clock presets', () => {
+  it('defines the revised Minimal preset exactly for a stable single-line clock', () => {
+    expect(PRESETS.Minimal).toEqual({
+      version: 1,
+      timezone: 'local',
+      locale: 'auto',
+      align: 'center',
+      gap: 0,
+      stroke: 0,
+      shadow: 4,
+      lines: [
+        {
+          enabled: true,
+          format: 'HH:mm',
+          font: 'mono',
+          size: 88,
+          weight: 600,
+          color: '#FFFFFF',
+          opacity: 1,
+          transform: 'none',
+        },
+        {
+          enabled: false,
+          format: 'dddd, MMMM D',
+          font: 'system',
+          size: 30,
+          weight: 500,
+          color: '#FFFFFF',
+          opacity: 0.9,
+          transform: 'none',
+        },
+      ],
+    });
+  });
+
   it('defines the Gameplay preset exactly for high-contrast moving backgrounds', () => {
     expect(PRESETS.Gameplay).toEqual({
       version: 1,

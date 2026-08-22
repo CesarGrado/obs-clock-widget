@@ -16,6 +16,23 @@ describe('clock editor', () => {
     expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#7c5cfc');
     (app.querySelector('#reset') as HTMLButtonElement).click(); expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#ffffff'); editor.destroy();
   });
+  it('applies revised Minimal as one monospaced line without reserved date space', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Minimal'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#shadow') as HTMLInputElement).value).toBe('4');
+    expect((app.querySelector('#stroke') as HTMLInputElement).value).toBe('0');
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('HH:mm');
+    expect((app.querySelector('#line1-font') as HTMLSelectElement).value).toBe('mono');
+    expect((app.querySelector('#line1-weight') as HTMLSelectElement).value).toBe('600');
+    expect((app.querySelector('#line2-enabled') as HTMLInputElement).checked).toBe(false);
+    const renderedLines = app.querySelectorAll<HTMLElement>('#preview-root .clock-line');
+    expect(renderedLines).toHaveLength(1);
+    expect(renderedLines[0]?.style.fontFamily).toContain('Roboto Mono');
+    expect((app.querySelector('#preview-root .clock-content') as HTMLElement).children).toHaveLength(1);
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('sh=4&f1=HH%3Amm&ft1=mono&s1=88&w1=600&e2=0');
+    editor.destroy();
+  });
+
   it('applies the Gameplay preset to every relevant editor control', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));

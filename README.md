@@ -32,7 +32,7 @@ The fragment is readable, not encrypted. It contains visual settings only and is
 
 ### Presets
 
-The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting points. **Gameplay** uses a large white clock with a bold black outline and an uppercase yellow date for readability over fast-changing bright and dark footage. Start with a **1920 × 300** or **800 × 240** Browser Source; reduce Stroke if the outline feels heavy at a smaller scale.
+The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting points. **Minimal** is a single-line monospaced `HH:mm` clock with a soft shadow, designed to stay visually steady as digits change without reserving space for a date. **Gameplay** uses a large white clock with a bold black outline and an uppercase yellow date for readability over fast-changing bright and dark footage. Start with a **1920 × 300** or **800 × 240** Browser Source; reduce Gameplay's Stroke if the outline feels heavy at a smaller scale.
 
 ### Recover or edit an existing clock
 

@@ -3,8 +3,8 @@ import { cloneClockConfig } from './clone';
 
 const withChanges = (changes: Partial<ClockConfig> & { lines?: ClockConfig['lines'] }): ClockConfig => ({ ...cloneClockConfig(DEFAULT_CONFIG), ...changes });
 export const PRESETS: Record<string, ClockConfig> = {
-  Minimal: withChanges({ gap: 0, shadow: 0, lines: [
-    { ...DEFAULT_CONFIG.lines[0], format: 'HH:mm', size: 88, weight: 500 },
+  Minimal: withChanges({ gap: 0, shadow: 4, lines: [
+    { ...DEFAULT_CONFIG.lines[0], format: 'HH:mm', font: 'mono', size: 88, weight: 600 },
     { ...DEFAULT_CONFIG.lines[1], enabled: false },
   ] }),
   Broadcast: withChanges({ align: 'left', gap: 10, stroke: 2, shadow: 6, lines: [
