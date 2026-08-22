@@ -35,7 +35,7 @@ Licenses: SIL Open Font License 1.1 (full text: https://openfontlicense.org/open
 - Oswald — Copyright 2016 The Oswald Project Authors
 - Outfit — Copyright 2021 The Outfit Project Authors
 - Patrick Hand — Copyright 2010-2012 Patrick Wagesreiter
-- Permanent Marker — Copyright 2010-2011 Google Inc. — Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+- Permanent Marker — Copyright 2010 Font Diner, Inc. — Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
 - Playfair Display — Copyright 2017 The Playfair Display Project Authors
 - Plus Jakarta Sans — Copyright 2020 The Plus Jakarta Sans Project Authors
 - Poppins — Copyright 2020 The Poppins Project Authors

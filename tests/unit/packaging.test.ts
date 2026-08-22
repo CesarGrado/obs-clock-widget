@@ -53,6 +53,8 @@ describe('deployment packaging', () => {
     expect(text).toContain('Version 2.0, January 2004');
     expect(text).toContain('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION');
     expect(text).toContain('END OF TERMS AND CONDITIONS');
+    expect(text).toContain('Copyright (c) 2010 by Font Diner, Inc. All rights reserved.');
+    expect(read('THIRD_PARTY_NOTICES.md')).toContain('- Permanent Marker — Copyright 2010 Font Diner, Inc. — Apache 2.0');
   });
 
   it('deploys notices and license texts into the built output', () => {
@@ -60,6 +62,7 @@ describe('deployment packaging', () => {
     if (existsSync('dist/THIRD_PARTY_NOTICES.md')) {
       expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Inter — Copyright 2016 The Inter Project Authors');
       expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Ubuntu Font Licence 1.0');
+      expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Permanent Marker — Copyright 2010 Font Diner, Inc. — Apache 2.0');
     }
     for (const name of ['Inter-OFL.txt', 'Montserrat-OFL.txt', 'Roboto-Mono-OFL.txt', 'Ubuntu-Mono-UFL-1.0.txt', 'Permanent-Marker-Apache-2.0.txt']) {
       expect(existsSync(`dist/licenses/${name}`)).toBe(true);
