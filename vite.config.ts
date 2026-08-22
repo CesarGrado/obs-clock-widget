@@ -15,8 +15,21 @@ const woff2Only = (): Plugin => ({
   },
 });
 
+// Redistribution compliance: copy the third-party notices and full license
+// texts for every bundled font into the deployment output.
+const shipLicenses = (): Plugin => ({
+  name: 'ship-license-texts',
+  apply: 'build',
+  generateBundle() {
+    this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source: readFileSync(resolve(__dirname, 'THIRD_PARTY_NOTICES.md')) });
+    for (const name of ['Inter-OFL.txt', 'Montserrat-OFL.txt', 'Roboto-Mono-OFL.txt', 'Ubuntu-Mono-UFL-1.0.txt', 'Permanent-Marker-Apache-2.0.txt']) {
+      this.emitFile({ type: 'asset', fileName: `licenses/${name}`, source: readFileSync(resolve(__dirname, 'licenses', name)) });
+    }
+  },
+});
+
 export default defineConfig({
-  plugins: [woff2Only()],
+  plugins: [woff2Only(), shipLicenses()],
   build: {
     target: 'chrome87',
     sourcemap: false,

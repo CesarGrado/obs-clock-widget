@@ -176,3 +176,31 @@ test('legacy font URLs keep their exact stacks', async ({ page }) => {
   await page.goto('/v1/clock/#v=1&ft1=retro');
   await expect(page.locator('.clock-line').first()).toHaveCSS('font-family', /Roboto Mono/);
 });
+
+test('imported weight-limited font URL keeps controls, preview, URL, and runtime in agreement', async ({ page, context }) => {
+  await page.goto('/editor/');
+  const existing = page.getByLabel('Load existing OBS URL or fragment');
+  await existing.fill('https://obs-clock-widget.pages.dev/v1/clock/#v=1&ft1=bebas-neue&w1=400');
+  await existing.press('Enter');
+  await expect(page.locator('#import-status')).toHaveText('Existing OBS URL loaded.');
+
+  await expect(page.locator('#line1-font')).toHaveValue('bebas-neue');
+  await expect(page.locator('#line1-weight')).toHaveValue('400');
+  await expect(page.locator('#preview-root .clock-line').first()).toHaveCSS('font-weight', '400');
+  const url = await page.locator('#obs-url').inputValue();
+  expect(url).toContain('ft1=bebas-neue&w1=400');
+
+  const widget = await context.newPage();
+  await widget.goto(url);
+  await expect(widget.locator('.clock-line').first()).toHaveCSS('font-family', /Bebas Neue/);
+  await expect(widget.locator('.clock-line').first()).toHaveCSS('font-weight', '400');
+});
+
+test('editor rejects a crafted import with an unsupported font weight', async ({ page }) => {
+  await page.goto('/editor/');
+  const existing = page.getByLabel('Load existing OBS URL or fragment');
+  await existing.fill('https://obs-clock-widget.pages.dev/v1/clock/#v=1&ft1=bebas-neue&w1=700');
+  await existing.press('Enter');
+  await expect(page.locator('#import-status')).not.toHaveText('Existing OBS URL loaded.');
+  await expect(page.locator('#line1-font')).toHaveValue('system');
+});

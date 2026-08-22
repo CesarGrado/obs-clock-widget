@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const read = (path: string) => readFileSync(path, 'utf8');
@@ -45,5 +45,33 @@ describe('deployment packaging', () => {
     expect(text).toContain('PERMISSION & CONDITIONS');
     expect(text).toContain('TERMINATION');
     expect(text).toContain('DISCLAIMER');
+  });
+
+  it('ships the complete Apache 2.0 licence text for Permanent Marker', () => {
+    const text = read('licenses/Permanent-Marker-Apache-2.0.txt');
+    expect(text).toContain('Apache License');
+    expect(text).toContain('Version 2.0, January 2004');
+    expect(text).toContain('TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION');
+    expect(text).toContain('END OF TERMS AND CONDITIONS');
+  });
+
+  it('deploys notices and license texts into the built output', () => {
+    expect(existsSync('dist/THIRD_PARTY_NOTICES.md')).toBe(true);
+    if (existsSync('dist/THIRD_PARTY_NOTICES.md')) {
+      expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Inter — Copyright 2016 The Inter Project Authors');
+      expect(read('dist/THIRD_PARTY_NOTICES.md')).toContain('- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Ubuntu Font Licence 1.0');
+    }
+    for (const name of ['Inter-OFL.txt', 'Montserrat-OFL.txt', 'Roboto-Mono-OFL.txt', 'Ubuntu-Mono-UFL-1.0.txt', 'Permanent-Marker-Apache-2.0.txt']) {
+      expect(existsSync(`dist/licenses/${name}`)).toBe(true);
+    }
+    expect(read('dist/licenses/Ubuntu-Mono-UFL-1.0.txt')).toContain('UBUNTU FONT LICENCE Version 1.0');
+    expect(read('dist/licenses/Permanent-Marker-Apache-2.0.txt')).toContain('Apache License');
+  });
+
+  it('emits WOFF2 font files only in the built output', () => {
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => entry.isDirectory() ? walk(`${dir}/${entry.name}`) : [`${dir}/${entry.name}`]);
+    const files = existsSync('dist') ? walk('dist') : [];
+    expect(files.filter((file) => file.endsWith('.woff2')).length).toBeGreaterThan(100);
+    expect(files.filter((file) => file.endsWith('.woff'))).toEqual([]);
   });
 });

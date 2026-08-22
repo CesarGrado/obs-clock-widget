@@ -1,4 +1,5 @@
 import { encodeConfig } from './codec';
+import { clampWeight } from './fonts';
 import { cloneClockConfig } from './clone';
 import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
 import { normalizeConfig } from './schema';
@@ -106,7 +107,7 @@ export function parseConfigImport(value: string, currentOrigin = window.location
       if (params.has(`f${number}`)) line.format = params.get(`f${number}`)!;
       if (params.has(`ft${number}`)) line.font = params.get(`ft${number}`) as typeof line.font;
       line.size = numeric(`s${number}`, line.size);
-      line.weight = numeric(`w${number}`, line.weight) as typeof line.weight;
+      line.weight = clampWeight(line.font, numeric(`w${number}`, line.weight));
       if (params.has(`c${number}`)) line.color = params.get(`c${number}`)!;
       line.opacity = numeric(`o${number}`, line.opacity);
       if (params.has(`tr${number}`)) line.transform = params.get(`tr${number}`) as typeof line.transform;

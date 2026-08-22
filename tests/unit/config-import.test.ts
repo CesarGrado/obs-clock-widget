@@ -34,6 +34,25 @@ describe('strict config import', () => {
     if (result.ok) expect(encodeConfig(result.config)).toBe(fragment);
   });
 
+  it('rejects a full widget URL import with an unsupported font weight instead of accepting mismatched state', () => {
+    const result = parseConfigImport('https://obs-clock-widget.pages.dev/v1/clock/#v=1&ft1=bebas-neue&w1=700', 'http://127.0.0.1:4173');
+    expect(result).toEqual({ ok: false, code: 'noncanonical-fragment' });
+  });
+
+  it('rejects a weight-limited font import whose omitted weight implies an unsupported default', () => {
+    const result = parseConfigImport('https://obs-clock-widget.pages.dev/v1/clock/#v=1&ft1=bebas-neue', 'http://127.0.0.1:4173');
+    expect(result).toEqual({ ok: false, code: 'noncanonical-fragment' });
+  });
+
+  it('accepts the canonical clamped URL so editor controls, preview, and runtime agree', () => {
+    const result = parseConfigImport('https://obs-clock-widget.pages.dev/v1/clock/#v=1&ft1=bebas-neue&w1=400', 'http://127.0.0.1:4173');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.config.lines[0].font).toBe('bebas-neue');
+    expect(result.config.lines[0].weight).toBe(400);
+    expect(encodeConfig(result.config)).toBe('v=1&ft1=bebas-neue&w1=400');
+  });
+
   it.each([
     ['v=1&f1=%E0%A4%A', 'malformed-escape'],
     ['v=1&v=1', 'duplicate-key'],
