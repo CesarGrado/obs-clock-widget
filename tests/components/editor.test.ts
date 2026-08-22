@@ -184,6 +184,19 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('offers a numeric month/day/year date format preset', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#line2-format-preset')!;
+    expect(Array.from(preset.options).map(({ value }) => value)).toContain('M/D/YYYY');
+
+    preset.value = 'M/D/YYYY'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect((app.querySelector('#line2-format') as HTMLInputElement).value).toBe('M/D/YYYY');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f2=M%2FD%2FYYYY');
+    expect(preset.value).toBe('M/D/YYYY');
+    editor.destroy();
+  });
+
   it('keeps each format preset indicator synchronized with the active format', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#preset')!;
