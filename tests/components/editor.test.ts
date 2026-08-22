@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initEditor } from '../../src/editor/main';
+import { parseConfigImport } from '../../src/config/import';
+import { DEFAULT_CONFIG } from '../../src/config/defaults';
 
 beforeEach(() => { document.body.innerHTML = '<main id="app"></main>'; history.replaceState(null, '', '/editor/'); });
 describe('clock editor', () => {
@@ -81,6 +83,22 @@ describe('clock editor', () => {
     expect(app.querySelector('#countdown-error')?.textContent).toBe('');
     editor.destroy(); vi.useRealTimers();
   });
+  it('resolves the Pacific/Chatham fall-back overlap to the first occurrence too', () => {
+    vi.setSystemTime(new Date('2026-04-01T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'chatham'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    // 2026-04-05 03:00 is ambiguous in Chatham (fall-back +13:45 → +12:45): first occurrence 13:15Z (2026-04-04 UTC).
+    date.value = '2026-04-05'; time.value = '03:00';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ct=2026-04-04T13%3A15%3A00Z');
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
   it('round-trips exact wall times in fractional-offset and normal timezones', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
@@ -140,6 +158,58 @@ describe('clock editor', () => {
     expect(target.getAttribute('aria-invalid')).toBeNull();
     expect(app.querySelector('#countdown-error')?.textContent).toBe('');
     editor.destroy(); vi.useRealTimers();
+  });
+  it('clears stale aria-invalid and errors when a valid config is imported, reset, or preset-selected', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    // Malformed manual entry sets aria-invalid and an error message…
+    target.value = 'not-a-date'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(target.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#countdown-error')?.textContent).not.toBe('');
+    // …but importing a valid fragment synchronizes a valid config and must clear both.
+    const imported = parseConfigImport('https://obs-clock-widget.pages.dev/v1/clock/#v=1&m=countdown&ct=2026-08-24T18%3A30%3A00Z');
+    if (!imported.ok) throw new Error(`Expected import to succeed, got ${imported.code}`);
+    editor.applyConfig(imported.config);
+    expect(target.value).toBe('2026-08-24T18:30:00Z');
+    expect(target.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    // Same after a malformed entry followed by reset to defaults.
+    target.value = 'garbage'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(target.getAttribute('aria-invalid')).toBe('true');
+    editor.applyConfig({ ...DEFAULT_CONFIG });
+    expect(target.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('schedules no summary timer for an expired target and cleans up on retarget, mode switch, and destroy', () => {
+    vi.useFakeTimers({ now: new Date('2026-08-22T12:00:00Z'), shouldAdvanceTime: false });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    // Expired target: text renders once, and no NEW timer appears beyond the preview renderer's.
+    const rendererBaseline = vi.getTimerCount();
+    target.value = '2026-08-22T11:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('It has ended');
+    // Expired target: the summary timer is removed; only the preview renderer's tick remains.
+    expect(vi.getTimerCount()).toBe(rendererBaseline - 1);
+    // Retarget to the future restores exactly one summary timer, replaced (not accumulated) on each retarget.
+    target.value = '2026-08-22T12:02:10Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    const timersAfterRetarget = vi.getTimerCount();
+    expect(timersAfterRetarget).toBe(rendererBaseline);
+    target.value = '2026-08-22T12:05:10Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(vi.getTimerCount()).toBe(timersAfterRetarget);
+    // Mode switch to clock clears the summary timer.
+    const clockCard = app.querySelector<HTMLInputElement>('#mode-clock')!; clockCard.checked = true; clockCard.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(vi.getTimerCount()).toBeLessThan(timersAfterRetarget);
+    // Re-entering countdown re-adds it (back to the full countdown baseline), and destroying the editor leaves no timers.
+    countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(vi.getTimerCount()).toBe(timersAfterRetarget);
+    editor.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
   });
   it('renders a sensible summary for an expired target and updates the summary as time passes', () => {
     vi.useFakeTimers({ now: new Date('2026-08-22T12:00:00Z'), shouldAdvanceTime: false });

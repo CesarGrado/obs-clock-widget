@@ -3,7 +3,7 @@ import '../styles/base.css';
 import '../styles/editor.css';
 import '../styles/clock.css';
 import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
-import { DEFAULT_CONFIG, LOCALES, type ClockLine } from '../config/defaults';
+import { DEFAULT_CONFIG, LOCALES, type ClockConfig, type ClockLine } from '../config/defaults';
 import { FONTS, FONT_CATEGORIES, clampWeight, fontById } from '../config/fonts';
 import { isCatalogTimezone, isTimezoneSupported, searchTimezones, type TimezoneId } from '../timezones/catalog';
 import { cloneClockConfig } from '../config/clone';
@@ -113,7 +113,7 @@ function buildEditor(app: HTMLElement) {
   layout.append(panel, previewPanel); app.append(header, layout);
 }
 
-export function initEditor(app: HTMLElement): { destroy: () => void } {
+export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: ClockConfig) => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const weightOptions = (n: number, fontId: string, weight: number) => {
@@ -132,7 +132,11 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   };
   const sync = () => {
     (byId<HTMLInputElement>('mode-clock')).checked = config.mode === 'clock'; (byId<HTMLInputElement>('mode-countdown')).checked = config.mode === 'countdown';
-    byId<HTMLInputElement>('countdown-target').value = config.countdownTarget;
+    const targetInput = byId<HTMLInputElement>('countdown-target');
+    targetInput.value = config.countdownTarget;
+    // A synchronized config is by definition valid: clear any stale manual-entry error state.
+    targetInput.removeAttribute('aria-invalid');
+    byId('countdown-error').textContent = '';
     if (config.mode === 'countdown' && config.countdownTarget) targetToDateTime(config.countdownTarget);
     byId<HTMLInputElement>('post-zero-clock').checked = !config.overtime; byId<HTMLInputElement>('post-zero-overtime').checked = config.overtime;
     byId('countdown-setup').hidden = config.mode !== 'countdown';
@@ -157,14 +161,20 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
     } else resolved.textContent = '';
   };
   let summaryTimer: number | undefined;
+  const clearSummaryTimer = () => {
+    if (summaryTimer !== undefined) { window.clearTimeout(summaryTimer); window.clearInterval(summaryTimer); summaryTimer = undefined; }
+  };
   const scheduleSummary = () => {
-    if (summaryTimer !== undefined) { window.clearInterval(summaryTimer); summaryTimer = undefined; }
+    clearSummaryTimer();
     if (config.mode !== 'countdown' || !isAbsoluteIsoTarget(config.countdownTarget)) return;
     const end = new Date(config.countdownTarget).getTime();
+    // Already expired: render the final text once; no timer needed.
+    if (end <= Date.now()) { refreshSummary(); return; }
     // Tick on each whole minute boundary of the remaining time so the summary stays current.
     const firstDelay = Math.max((end - Date.now()) % 60_000, 250);
     summaryTimer = window.setTimeout(() => {
       refreshSummary();
+      if (Date.now() >= end) { summaryTimer = undefined; return; }
       summaryTimer = window.setInterval(() => {
         refreshSummary();
         if (Date.now() >= end) { window.clearInterval(summaryTimer); summaryTimer = undefined; }
@@ -202,19 +212,22 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
     const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
     const candidate = new Date(Date.UTC(year!, (month ?? 1) - 1, day!, hour ?? 0, minute ?? 0));
     const timeZone = config.timezone === 'local' ? undefined : config.timezone;
-    // Two-pass offset resolution: wall times adjacent to a DST transition need the offset
-    // of the resolved instant, not the candidate's first guess.
+    // Enumerate plausible offsets around the wall time, keep instants that round-trip to the
+    // exact selected wall time, and pick the EARLIEST — the explicit "first occurrence"
+    // policy for DST fall-back overlaps. Zero candidates means a DST gap (rejected).
     const offsetFor = (instant: Date) => timeZone ? resolveTimezoneOffsetMs(instant, timeZone) : -instant.getTimezoneOffset() * 60_000;
-    const firstOffset = offsetFor(candidate);
-    const provisional = new Date(candidate.getTime() - firstOffset);
-    const absolute = new Date(candidate.getTime() - offsetFor(provisional));
-    // DST gap check: the chosen wall time must convert back exactly, or the time does not exist (e.g. 02:30 on spring-forward day).
-    const back = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(absolute);
-    const backGet = (type: string) => Number(back.find((part) => part.type === type)?.value ?? '0');
-    if (backGet('year') !== year || backGet('month') !== month || backGet('day') !== day || backGet('hour') % 24 !== hour || backGet('minute') !== minute) {
+    const backFmt = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const roundTrips = (instant: Date) => {
+      const parts = backFmt.formatToParts(instant); const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
+      return get('year') === year && get('month') === month && get('day') === day && get('hour') % 24 === hour && get('minute') === minute;
+    };
+    const probes = [candidate.getTime() - 15 * 3_600_000, candidate.getTime(), candidate.getTime() + 15 * 3_600_000].map((ms) => offsetFor(new Date(ms)));
+    const instants = [...new Set(probes)].map((offset) => new Date(candidate.getTime() - offset)).filter(roundTrips);
+    if (instants.length === 0) {
       byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.';
       return;
     }
+    const absolute = new Date(Math.min(...instants.map((instant) => instant.getTime())));
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
     if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time for your countdown.'; return; }
     if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
@@ -315,7 +328,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
-  sync(); refresh(); return { destroy: () => { if (summaryTimer !== undefined) { window.clearTimeout(summaryTimer); window.clearInterval(summaryTimer); } clock?.stop(); } };
+  sync(); refresh(); return { destroy: () => { clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);
