@@ -16,7 +16,9 @@ describe('deployment packaging', () => {
   it('documents packaged font attribution and emitted formats accurately', () => {
     const notices = read('THIRD_PARTY_NOTICES.md');
     expect(notices).toContain('- Inter — Copyright 2016 The Inter Project Authors');
-    expect(notices).toContain('WOFF and WOFF2 assets');
+    expect(notices).toContain('WOFF2 assets');
+    expect(notices).not.toContain('WOFF and WOFF2');
+    expect(notices).toContain('- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Ubuntu Font Licence 1.0');
   });
 
   it('ships complete SIL OFL text and attribution for every distributed font', () => {
@@ -34,5 +36,14 @@ describe('deployment packaging', () => {
       expect(text).toContain('DISCLAIMER');
       expect(text).toContain('OTHER DEALINGS IN THE FONT SOFTWARE.');
     }
+  });
+
+  it('ships the complete Ubuntu Font Licence text for Ubuntu Mono', () => {
+    const text = read('licenses/Ubuntu-Mono-UFL-1.0.txt');
+    expect(text).toContain('UBUNTU FONT LICENCE Version 1.0');
+    expect(text).toContain('PREAMBLE');
+    expect(text).toContain('PERMISSION & CONDITIONS');
+    expect(text).toContain('TERMINATION');
+    expect(text).toContain('DISCLAIMER');
   });
 });

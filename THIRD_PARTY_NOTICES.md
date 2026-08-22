@@ -2,7 +2,7 @@
 
 Bundled web fonts are sourced from Fontsource packages. All are self-hosted latin-subset WOFF2 assets emitted at build time; no font provider is contacted at runtime.
 
-Licenses: SIL Open Font License 1.1 (full text: https://openfontlicense.org/open-font-license-official-text/) unless noted Apache 2.0 below.
+Licenses: SIL Open Font License 1.1 (full text: https://openfontlicense.org/open-font-license-official-text/) except Permanent Marker (Apache 2.0) and Ubuntu Mono (Ubuntu Font Licence 1.0, full text in `licenses/Ubuntu-Mono-UFL-1.0.txt`).
 
 - Inter — Copyright 2016 The Inter Project Authors
 - Montserrat — Copyright 2011 The Montserrat Project Authors
@@ -45,9 +45,9 @@ Licenses: SIL Open Font License 1.1 (full text: https://openfontlicense.org/open
 - Source Code Pro — Copyright 2010-2015 Adobe
 - Space Grotesk — Copyright 2020 The Space Grotesk Project Authors
 - Space Mono — Copyright 2016 The Space Mono Project Authors
-- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Apache 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+- Ubuntu Mono — Copyright 2011 Canonical Ltd. — Ubuntu Font Licence 1.0 (full text in `licenses/Ubuntu-Mono-UFL-1.0.txt`)
 - Work Sans — Copyright 2019 The Work Sans Project Authors
 
-Font files are emitted as same-origin hashed WOFF and WOFF2 assets during the build. No font provider is contacted at runtime.
+Font files are emitted as same-origin hashed WOFF2 assets during the build. No font provider is contacted at runtime.
 
 The canonical timezone catalog in `src/timezones/generated.ts` is generated from the IANA Time Zone Database `zone.tab` installed with system tzdata. The IANA Time Zone Database is public-domain data. See https://www.iana.org/time-zones.

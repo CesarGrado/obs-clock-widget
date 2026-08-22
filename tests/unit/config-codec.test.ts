@@ -31,5 +31,21 @@ describe('fragment codec', () => {
     'v=1&ot=1',
   ])('fails safely for invalid countdown fragment %s', (fragment) => expect(decodeConfig(fragment)).toEqual(DEFAULT_CONFIG));
   it('keeps the legacy canonical fragment byte-identical', () => expect(encodeConfig(decodeConfig('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'))).toBe('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'));
+  it('clamps unsupported font/weight pairs at the decode boundary', () => {
+    expect(decodeConfig('v=1&ft1=bebas-neue&w1=700').lines[0].weight).toBe(400);
+    expect(decodeConfig('v=1&ft2=ubuntu-mono&w2=500').lines[1].weight).toBe(400);
+    expect(decodeConfig('v=1&ft1=lato&w1=600').lines[0].weight).toBe(700);
+    expect(decodeConfig('v=1&ft1=anton&w1=600&ft2=space-mono&w2=600').lines[1].weight).toBe(700);
+  });
+  it('clamps weights in imported full widget URLs', () => {
+    const imported = decodeConfig('v=1&ft1=bebas-neue&w1=700&f1=HH%3Amm');
+    expect(imported.lines[0].font).toBe('bebas-neue');
+    expect(imported.lines[0].weight).toBe(400);
+  });
+  it('round trips a crafted bebas-neue URL with the clamped weight re-encoded', () => {
+    const config = decodeConfig('v=1&ft1=bebas-neue&w1=700');
+    expect(encodeConfig(config)).toBe('v=1&ft1=bebas-neue&w1=400');
+    expect(decodeConfig(encodeConfig(config)).lines[0].weight).toBe(400);
+  });
   it('never throws for arbitrary payloads', () => fc.assert(fc.property(fc.string(), (payload) => { expect(() => decodeConfig(payload)).not.toThrow(); }), { numRuns: 200 }));
 });

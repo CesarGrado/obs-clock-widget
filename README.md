@@ -68,7 +68,7 @@ The catalog is generated from the system IANA tzdata `zone.tab`, committed in `s
 
 ## Fonts and licensing
 
-The clock ships a curated library of 40+ self-hosted fonts, grouped in the editor by category (Classic, Sans, Display, Monospace, Handwritten, Serif): Inter, Roboto, Open Sans, Lato, Oswald, Bebas Neue, Anton, Poppins, JetBrains Mono, Fira Code, Caveat, Permanent Marker, Playfair Display, and more. All are bundled at build time from Fontsource (latin subsets) under the SIL Open Font License 1.1 / Apache 2.0. See `THIRD_PARTY_NOTICES.md`. System fallbacks remain available, and the classic `system`, `mono`, `display`, and `retro` font choices are preserved so existing widget URLs render unchanged. Fonts load only from same-origin assets — no CDN or external requests at runtime.
+The clock ships a curated library of 40+ self-hosted fonts, grouped in the editor by category (Classic, Sans, Display, Monospace, Handwritten, Serif): Inter, Roboto, Open Sans, Lato, Oswald, Bebas Neue, Anton, Poppins, JetBrains Mono, Fira Code, Caveat, Permanent Marker, Playfair Display, and more. All are bundled at build time from Fontsource (latin subsets) under the SIL Open Font License 1.1, Apache 2.0, or Ubuntu Font Licence 1.0. See `THIRD_PARTY_NOTICES.md`. System fallbacks remain available, and the classic `system`, `mono`, `display`, and `retro` font choices are preserved so existing widget URLs render unchanged. Fonts load only from same-origin assets — no CDN or external requests at runtime.
 
 ## Compatibility status
 

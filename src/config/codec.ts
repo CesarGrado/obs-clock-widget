@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
 import { cloneClockConfig } from './clone';
 import { normalizeConfig } from './schema';
+import { clampWeight } from './fonts';
 
 const keys = ['v','m','ct','ot','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
 const allowed = new Set<string>(keys);
@@ -38,7 +39,7 @@ export function decodeConfig(fragment: string): ClockConfig {
     c.lines.forEach((line, i) => { const n = i + 1;
       if (p.has(`e${n}`)) { const enabled = p.get(`e${n}`); if (enabled !== '0' && enabled !== '1') throw new Error('Invalid boolean'); line.enabled = enabled === '1'; } if (p.has(`f${n}`)) line.format = p.get(`f${n}`)!;
       if (p.has(`ft${n}`)) line.font = p.get(`ft${n}`) as typeof line.font; line.size = numeric(`s${n}`, line.size);
-      line.weight = numeric(`w${n}`, line.weight) as typeof line.weight; if (p.has(`c${n}`)) line.color = p.get(`c${n}`)!;
+      line.weight = clampWeight(line.font, numeric(`w${n}`, line.weight)); if (p.has(`c${n}`)) line.color = p.get(`c${n}`)!;
       line.opacity = numeric(`o${n}`, line.opacity); if (p.has(`tr${n}`)) line.transform = p.get(`tr${n}`) as typeof line.transform;
     });
     return normalizeConfig(c);
