@@ -60,7 +60,7 @@ function buildEditor(app: HTMLElement) {
   const importForm = element('form', { class: 'import-existing', novalidate: '' }); const existingUrl = input('existing-obs-url', 'text'); existingUrl.maxLength = 4096; existingUrl.setAttribute('autocomplete', 'off'); existingUrl.setAttribute('aria-describedby', 'import-help import-status');
   importForm.append(element('label', { for: 'existing-obs-url' }, 'Load existing OBS URL or fragment'), existingUrl, element('button', { id: 'load-existing', type: 'submit' }, 'Load'));
   output.append(importForm, element('p', { id: 'import-help', class: 'help' }, 'Paste a generated /v1/clock/ URL, or its fragment beginning with v=1 or #v=1.'), element('p', { id: 'import-status', role: 'status', 'aria-live': 'polite' }));
-  const actions = element('div', { class: 'actions' }); actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy OBS URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy setup text'), element('button', { id: 'open-preview', type: 'button' }, 'Open widget preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'));
+  const actions = element('div', { class: 'actions' }); actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy OBS URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy setup text'), element('button', { id: 'open-preview', type: 'button' }, 'Open widget preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'), element('button', { id: 'undo-reset', type: 'button', class: 'secondary', disabled: '' }, 'Undo reset'));
   output.append(actions, element('p', { id: 'copy-status', role: 'status', 'aria-live': 'polite' }), element('p', { id: 'url-warning', class: 'warning' })); panel.append(output);
   const help = element('section', { class: 'instructions' }); help.append(element('h2', {}, 'Add to OBS'), element('ol'));
   const steps = ['Sources → + → Browser; create “Stream Clock”.','Paste the generated URL.','Use 1920 × 300 (or 800 × 240 for compact presets).','Leave custom CSS empty.','Leave “Shutdown source when not visible” and “Refresh browser when scene becomes active” off for uninterrupted operation.']; steps.forEach((step) => help.querySelector('ol')!.append(element('li', {}, step)));
@@ -72,7 +72,7 @@ function buildEditor(app: HTMLElement) {
 }
 
 export function initEditor(app: HTMLElement): { destroy: () => void } {
-  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let clock: ReturnType<typeof renderClock> | undefined;
+  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const sync = () => {
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
@@ -141,7 +141,16 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   });
   existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
   existingUrl.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); importForm.requestSubmit(); } });
-  byId('reset').addEventListener('click', () => { config = cloneClockConfig(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
+  byId('reset').addEventListener('click', () => {
+    resetSnapshot = cloneClockConfig(config);
+    config = cloneClockConfig(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
+    byId<HTMLButtonElement>('undo-reset').disabled = false; byId('copy-status').textContent = 'Defaults restored. Undo is available.';
+  });
+  byId('undo-reset').addEventListener('click', () => {
+    if (!resetSnapshot) return;
+    config = resetSnapshot; resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
+    byId<HTMLButtonElement>('undo-reset').disabled = true; byId('copy-status').textContent = 'Previous settings restored.';
+  });
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));

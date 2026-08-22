@@ -38,6 +38,8 @@ The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting poi
 
 Use **Swap lines** to move the complete Line 1 and Line 2 designs—including format, font, color, size, and enabled state—without rebuilding either line.
 
+If **Reset** is selected accidentally, **Undo reset** restores the configuration that was in the editor immediately before the reset. This recovery is available only in the current page session and does not store settings.
+
 ### Recover or edit an existing clock
 
 In the editor's **Output** section, paste either the complete generated OBS URL or only its `v=1&...` fragment into **Load existing OBS URL or fragment**, then select **Load** (or press Enter). A successful import replaces the editor settings; change any value and copy the newly generated URL back into OBS.

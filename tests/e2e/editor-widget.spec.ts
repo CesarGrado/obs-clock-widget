@@ -91,6 +91,22 @@ test('copies setup instructions with the selected compact Browser Source size', 
   expect(copied).toContain('/v1/clock/#v=1');
 });
 
+test('undoes an accidental reset and clearly marks the unavailable action', async ({ page }) => {
+  await page.goto('/editor/');
+  const format = page.locator('#line1-format'); const undo = page.getByRole('button', { name: 'Undo reset' });
+  await format.fill('HH:mm'); const customizedUrl = await page.locator('#obs-url').inputValue();
+  await expect(undo).toBeDisabled();
+  await expect(undo).toHaveCSS('cursor', 'not-allowed');
+
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(undo).toBeEnabled(); await undo.click();
+
+  await expect(format).toHaveValue('HH:mm');
+  await expect(page.locator('#obs-url')).toHaveValue(customizedUrl);
+  await expect(page.locator('#copy-status')).toHaveText('Previous settings restored.');
+  await expect(undo).toBeDisabled();
+});
+
 test('editor is accessible and has no narrow viewport overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
   const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);

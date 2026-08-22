@@ -16,6 +16,39 @@ describe('clock editor', () => {
     expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#7c5cfc');
     (app.querySelector('#reset') as HTMLButtonElement).click(); expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#ffffff'); editor.destroy();
   });
+  it('restores the configuration that was replaced by reset', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    const customizedUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+    expect(undo.disabled).toBe(true);
+
+    (app.querySelector('#reset') as HTMLButtonElement).click();
+    expect(undo.disabled).toBe(false);
+    expect(format.value).toBe('HH:mm:ss');
+    undo.click();
+
+    expect(format.value).toBe('HH:mm');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(customizedUrl);
+    expect(undo.disabled).toBe(true);
+    editor.destroy();
+  });
+  it('updates undo to the configuration immediately before the latest reset', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#reset') as HTMLButtonElement).click();
+    format.value = 'h:mm a'; format.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (app.querySelector('#reset') as HTMLButtonElement).click();
+    (app.querySelector('#undo-reset') as HTMLButtonElement).click();
+
+    expect(format.value).toBe('h:mm a');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=h%3Amm+a');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Previous settings restored.');
+    editor.destroy();
+  });
   it('applies revised Minimal as one monospaced line without reserved date space', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Minimal'; preset.dispatchEvent(new Event('change', { bubbles: true }));
