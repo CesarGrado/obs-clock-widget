@@ -76,3 +76,12 @@ describe('clock presets', () => {
     });
   });
 });
+
+describe('stream start preset', () => {
+  it('showcases handwritten library fonts with valid weights', () => {
+    const preset = PRESETS['Stream Start']!;
+    expect(preset.lines[0]).toMatchObject({ font: 'permanent-marker', weight: 400 });
+    expect(preset.lines[1]).toMatchObject({ font: 'caveat', weight: 600 });
+    expect(preset.lines[0]!.format).toContain('stream starts soon');
+  });
+});
