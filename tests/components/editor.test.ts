@@ -147,6 +147,17 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('labels format presets with a readable description and their exact format', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const options = Array.from(app.querySelector<HTMLSelectElement>('#line1-format-preset')!.options);
+
+    expect(options.find(({ value }) => value === 'HH:mm:ss')?.textContent).toBe('24-hour with seconds — HH:mm:ss');
+    expect(options.find(({ value }) => value === 'h:mm a')?.textContent).toBe('12-hour — h:mm a');
+    expect(options.find(({ value }) => value === 'M/D/YYYY')?.textContent).toBe('Numeric date — M/D/YYYY');
+    expect(options.find(({ value }) => value === "HH:mm 'UTC'")?.textContent).toBe("UTC label — HH:mm 'UTC'");
+    editor.destroy();
+  });
+
   it('offers a 12-hour format preset with seconds', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;

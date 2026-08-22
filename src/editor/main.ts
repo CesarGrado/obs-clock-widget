@@ -30,10 +30,22 @@ const option = (value: string, label = value) => element('option', { value }, la
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
 const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
 
+const FORMAT_PRESETS = [
+  ['', 'Custom'],
+  ['HH:mm:ss', '24-hour with seconds — HH:mm:ss'],
+  ['HH:mm', '24-hour — HH:mm'],
+  ['h:mm:ss a', '12-hour with seconds — h:mm:ss a'],
+  ['h:mm a', '12-hour — h:mm a'],
+  ['M/D/YYYY', 'Numeric date — M/D/YYYY'],
+  ['ddd, MMM D', 'Compact date — ddd, MMM D'],
+  ['dddd, MMMM D, YYYY', 'Full date — dddd, MMMM D, YYYY'],
+  ["HH:mm 'UTC'", "UTC label — HH:mm 'UTC'"],
+] as const;
+
 function buildLine(parent: HTMLElement, n: number) {
   const section = element('fieldset'); section.append(element('legend', {}, `Line ${n}`));
   const enabled = input(`line${n}-enabled`, 'checkbox'); labeled(section, 'Enabled', enabled);
-  const presets = select(`line${n}-format-preset`, ['', 'HH:mm:ss', 'HH:mm', 'h:mm:ss a', 'h:mm a', 'M/D/YYYY', 'ddd, MMM D', 'dddd, MMMM D, YYYY', "HH:mm 'UTC'"]); presets.options[0]!.text = 'Custom'; labeled(section, 'Format preset', presets);
+  const presets = element('select', { id: `line${n}-format-preset` }); FORMAT_PRESETS.forEach(([value, label]) => presets.append(option(value, label))); labeled(section, 'Format preset', presets);
   const format = input(`line${n}-format`, 'text'); format.maxLength = 64; format.setAttribute('aria-describedby', `line${n}-error token-help`); labeled(section, 'Format', format);
   section.append(element('p', { id: `line${n}-error`, class: 'error', role: 'alert' }));
   labeled(section, 'Font', select(`line${n}-font`, FONT_IDS)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));
