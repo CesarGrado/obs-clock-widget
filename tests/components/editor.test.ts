@@ -103,6 +103,28 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('matches Line 2 styling to Line 1 without replacing its content settings', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    const change = (id: string, value: string) => { const control = app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!; control.value = value; control.dispatchEvent(new Event(control instanceof HTMLInputElement && control.type === 'range' ? 'input' : 'change', { bubbles: true })); };
+    change('line1-font', 'mono'); change('line1-weight', '600'); change('line1-opacity', '0.5');
+    (app.querySelector('#line1-enabled') as HTMLInputElement).click();
+
+    (app.querySelector('#match-line2-style') as HTMLButtonElement).click();
+
+    expect((app.querySelector('#line2-enabled') as HTMLInputElement).checked).toBe(true);
+    expect((app.querySelector('#line2-format') as HTMLInputElement).value).toBe('ddd, MMM D');
+    expect((app.querySelector('#line2-font') as HTMLSelectElement).value).toBe('mono');
+    expect((app.querySelector('#line2-size') as HTMLInputElement).value).toBe('80');
+    expect((app.querySelector('#line2-weight') as HTMLSelectElement).value).toBe('600');
+    expect((app.querySelector('#line2-color') as HTMLInputElement).value).toBe('#ffffff');
+    expect((app.querySelector('#line2-opacity') as HTMLInputElement).value).toBe('0.5');
+    expect((app.querySelector('#line2-transform') as HTMLSelectElement).value).toBe('none');
+    expect((app.querySelector('#preset') as HTMLSelectElement).value).toBe('Custom');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f2=ddd%2C+MMM+D&ft2=mono&s2=80&w2=600&o2=0.5');
+    editor.destroy();
+  });
+
   it('rejects invalid formats without replacing the last preview', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app); const before = app.querySelector('#preview-root')?.textContent;
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));

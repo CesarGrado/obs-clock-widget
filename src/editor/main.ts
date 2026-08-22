@@ -53,7 +53,7 @@ function buildEditor(app: HTMLElement) {
   global.append(element('label', { for: 'timezone' }, 'Timezone'), timezoneWrap, element('p', { id: 'timezone-help', class: 'help' }, 'Search by city, region, canonical ID, or UTC offset.'), element('p', { id: 'timezone-error', class: 'error', role: 'alert' }));
   labeled(global, 'Locale', select('locale', LOCALES));
   labeled(global, 'Alignment', select('align', ['left','center','right'])); labeled(global, 'Line gap', input('gap', 'number', 0, 80)); labeled(global, 'Stroke', input('stroke', 'number', 0, 8)); labeled(global, 'Shadow', input('shadow', 'number', 0, 30)); panel.append(global);
-  buildLine(panel, 1); buildLine(panel, 2); panel.append(element('button', { id: 'swap-lines', type: 'button', class: 'secondary' }, 'Swap lines'), element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
+  buildLine(panel, 1); buildLine(panel, 2); panel.append(element('button', { id: 'swap-lines', type: 'button', class: 'secondary' }, 'Swap lines'), element('button', { id: 'match-line2-style', type: 'button', class: 'secondary' }, 'Match Line 2 style to Line 1'), element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
   const output = element('fieldset'); output.append(element('legend', {}, 'Output'));
   const obsSize = select('obs-size', ['1920 × 300', '800 × 240']); labeled(output, 'OBS Browser Source size', obsSize);
   const url = input('obs-url', 'text'); url.readOnly = true; labeled(output, 'OBS URL', url);
@@ -124,6 +124,11 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { const control = event.target as HTMLInputElement; if (!control.validity.valid) return; config[key] = Number(control.value); refresh(); }));
   byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = cloneClockConfig(chosen); sync(); refresh(); } });
   byId('swap-lines').addEventListener('click', () => { config.lines = [config.lines[1], config.lines[0]]; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
+  byId('match-line2-style').addEventListener('click', () => {
+    const source = config.lines[0]; const target = config.lines[1];
+    config.lines[1] = { ...target, font: source.font, size: source.size, weight: source.weight, color: source.color, opacity: source.opacity, transform: source.transform };
+    byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
+  });
   byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });
   const importForm = app.querySelector<HTMLFormElement>('.import-existing')!;
   const existingUrl = byId<HTMLInputElement>('existing-obs-url');

@@ -107,6 +107,18 @@ test('undoes an accidental reset and clearly marks the unavailable action', asyn
   await expect(undo).toBeDisabled();
 });
 
+test('matches Line 2 styling while preserving its format', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
+  await page.getByLabel('Preset', { exact: true }).selectOption('Gameplay');
+  await page.getByRole('button', { name: 'Match Line 2 style to Line 1' }).click();
+
+  await expect(page.locator('#line2-format')).toHaveValue('ddd, MMM D');
+  await expect(page.locator('#line2-size')).toHaveValue('80');
+  await expect(page.locator('#line2-color')).toHaveValue('#ffffff');
+  await expect(page.locator('#obs-url')).toHaveValue(/f2=ddd%2C\+MMM\+D&s2=80&w2=700/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('editor is accessible and has no narrow viewport overflow', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 }); await page.goto('/editor/');
   const results = await new AxeBuilder({ page }).analyze(); expect(results.violations.filter((v) => ['serious','critical'].includes(v.impact ?? ''))).toEqual([]);
