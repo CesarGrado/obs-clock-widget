@@ -171,6 +171,26 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('keeps each format preset indicator synchronized with the active format', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!;
+    preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#line1-format-preset') as HTMLSelectElement).value).toBe('HH:mm:ss');
+    expect((app.querySelector('#line2-format-preset') as HTMLSelectElement).value).toBe('ddd, MMM D');
+
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = "HH:mm 'LIVE'"; format.dispatchEvent(new Event('input', { bubbles: true }));
+    const linePreset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;
+    expect(linePreset.value).toBe('');
+    expect(linePreset.selectedIndex).toBe(0);
+    expect(linePreset.selectedOptions[0]?.textContent).toBe('Custom');
+
+    linePreset.value = 'h:mm a'; linePreset.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(preset.value).toBe('Custom');
+    expect(linePreset.value).toBe('h:mm a');
+    editor.destroy();
+  });
+
   it('rejects invalid formats without replacing the last preview', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app); const before = app.querySelector('#preview-root')?.textContent;
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));

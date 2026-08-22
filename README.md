@@ -52,7 +52,7 @@ For safety, the editor accepts runtime URLs only from the current deployment ori
 
 `HH H h mm m ss s a`, `dddd ddd`, `MMMM MMM M`, `D`, `YYYY YY`. Wrap literal text in single quotes.
 
-Each line's format presets include both 24-hour and 12-hour clocks with seconds, plus compact and full dates. Choose `h:mm:ss a` for an AM/PM clock that keeps seconds visible, or `ddd, MMM D` for a space-saving date such as `Sat, Aug 22`.
+Each line's format presets include both 24-hour and 12-hour clocks with seconds, plus compact and full dates. Choose `h:mm:ss a` for an AM/PM clock that keeps seconds visible, or `ddd, MMM D` for a space-saving date such as `Sat, Aug 22`. The preset selector reflects the active format after applying a design preset, swapping lines, or loading an existing URL; formats entered by hand are identified as Custom.
 
 ## Timezones
 
