@@ -170,6 +170,35 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('groups more than 30 fonts into category optgroups', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const font = app.querySelector<HTMLSelectElement>('#line1-font')!;
+    const options = Array.from(font.options);
+    expect(options.length).toBeGreaterThan(30);
+    expect(options.find(({ value }) => value === 'bebas-neue')?.textContent).toBe('Bebas Neue');
+    const groups = Array.from(font.querySelectorAll('optgroup'));
+    expect(groups.map((group) => group.getAttribute('label'))).toEqual(['Classic', 'Sans', 'Display', 'Mono', 'Handwritten', 'Serif']);
+    for (const group of groups) expect(group.querySelectorAll('option').length).toBeGreaterThan(0);
+    editor.destroy();
+  });
+
+  it('filters weight options to the selected font and clamps the current weight', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const font = app.querySelector<HTMLSelectElement>('#line1-font')!;
+    const weight = app.querySelector<HTMLSelectElement>('#line1-weight')!;
+    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400', '500', '600', '700']);
+    font.value = 'bebas-neue'; font.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400']);
+    expect(weight.value).toBe('400');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ft1=bebas-neue');
+    expect((app.querySelector('#preview-root .clock-line') as HTMLElement).style.fontFamily).toContain('Bebas Neue');
+    font.value = 'lato'; font.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400', '700']);
+    font.value = 'system'; font.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400', '500', '600', '700']);
+    editor.destroy();
+  });
+
   it('labels format presets with a readable description and their exact format', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const options = Array.from(app.querySelector<HTMLSelectElement>('#line1-format-preset')!.options);

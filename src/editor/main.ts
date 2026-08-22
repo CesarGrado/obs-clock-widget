@@ -3,7 +3,8 @@ import '../styles/base.css';
 import '../styles/editor.css';
 import '../styles/clock.css';
 import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
-import { DEFAULT_CONFIG, FONT_IDS, LOCALES, type ClockLine } from '../config/defaults';
+import { DEFAULT_CONFIG, LOCALES, type ClockLine } from '../config/defaults';
+import { FONTS, FONT_CATEGORIES, clampWeight, fontById } from '../config/fonts';
 import { isCatalogTimezone, isTimezoneSupported, searchTimezones, type TimezoneId } from '../timezones/catalog';
 import { cloneClockConfig } from '../config/clone';
 import { PRESETS } from '../config/presets';
@@ -17,6 +18,7 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<st
 };
 const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
 const option = (value: string, label = value) => element('option', { value }, label);
+const fontSelect = (id: string) => { const node = element('select', { id }); FONT_CATEGORIES.forEach((category) => { const group = element('optgroup', { label: category }); FONTS.filter((font) => font.category === category).forEach((font) => group.append(option(font.id, font.label))); node.append(group); }); return node; };
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
 const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
 
@@ -38,8 +40,8 @@ function buildLine(parent: HTMLElement, n: number) {
   const presets = element('select', { id: `line${n}-format-preset` }); FORMAT_PRESETS.forEach(([value, label]) => presets.append(option(value, label))); labeled(section, 'Format preset', presets);
   const format = input(`line${n}-format`, 'text'); format.maxLength = 64; format.setAttribute('aria-describedby', `line${n}-error token-help`); labeled(section, 'Format', format);
   section.append(element('p', { id: `line${n}-error`, class: 'error', role: 'alert' }));
-  labeled(section, 'Font', select(`line${n}-font`, FONT_IDS)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));
-  labeled(section, 'Weight', select(`line${n}-weight`, ['400','500','600','700'])); labeled(section, 'Color', input(`line${n}-color`, 'color'));
+  labeled(section, 'Font', fontSelect(`line${n}-font`)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));
+  labeled(section, 'Weight', element('select', { id: `line${n}-weight` })); labeled(section, 'Color', input(`line${n}-color`, 'color'));
   labeled(section, 'Opacity', input(`line${n}-opacity`, 'range', 0, 1, .05)); labeled(section, 'Transform', select(`line${n}-transform`, ['none','uppercase','lowercase'])); parent.append(section);
 }
 
@@ -83,13 +85,18 @@ function buildEditor(app: HTMLElement) {
 export function initEditor(app: HTMLElement): { destroy: () => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
+  const weightOptions = (n: number, fontId: string, weight: number) => {
+    const control = byId<HTMLSelectElement>(`line${n}-weight`);
+    control.replaceChildren(...(fontById(fontId)?.weights ?? [400, 500, 600, 700]).map((value) => option(String(value))));
+    control.value = String(clampWeight(fontId, weight));
+  };
   const syncFormatPreset = (n: number, format: string) => { const preset = byId<HTMLSelectElement>(`line${n}-format-preset`); preset.value = Array.from(preset.options).some(({ value }) => value === format) ? format : ''; };
   const sync = () => {
     byId<HTMLSelectElement>('mode').value = config.mode; byId<HTMLInputElement>('countdown-target').value = config.countdownTarget; byId<HTMLInputElement>('overtime').checked = config.overtime; byId('countdown-controls').hidden = config.mode !== 'countdown';
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
-      byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); byId<HTMLSelectElement>(`line${n}-weight`).value = String(line.weight);
+      byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); weightOptions(n, line.font, line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
   const refresh = () => {
@@ -144,7 +151,9 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   const lineControl = (n: number, field: keyof ClockLine, parse: (control: HTMLInputElement | HTMLSelectElement) => unknown) => { const control = byId<HTMLInputElement | HTMLSelectElement>(`line${n}-${field}`); const event = control instanceof HTMLInputElement && ['text','number','range'].includes(control.type) ? 'input' : 'change'; control.addEventListener(event, () => {
     if (!control.validity.valid) return;
     if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; syncFormatPreset(n, control.value); }
-    (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+    (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control);
+    if (field === 'font') { const line = config.lines[n - 1]!; line.weight = clampWeight(line.font, line.weight); weightOptions(n, line.font, line.weight); }
+    byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   }); };
   [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
     byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); } }); });
