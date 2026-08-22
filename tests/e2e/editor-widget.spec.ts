@@ -12,11 +12,10 @@ test('editor config reproduces in the permanent widget route', async ({ page, co
 
 test('builds an accessible countdown that reproduces in wide and compact OBS layouts', async ({ page, context }) => {
   await page.goto('/editor/');
-  await page.getByLabel('Mode').selectOption('countdown');
-  const target = new Date(Date.now() + 2 * 86_400_000).toISOString().replace('.000Z', 'Z');
-  await page.getByLabel('Target (ISO 8601)').fill(target);
-  await expect(page.locator('#resolved-target')).toContainText('Resolved target:');
-  await expect(page.locator('#preview-root .clock-line').first()).toHaveText(/^(1d 23:59|2d 00:00):\d{2}$/);
+  await page.locator('label.mode-card[for="mode-countdown"]').click();
+  await page.locator('#quick-10').click();
+  await expect(page.locator('#resolved-target')).toContainText('remaining');
+  await expect(page.locator('#preview-root .clock-line').first()).toHaveText(/^00:09:\d{2}$/);
   const url = await page.locator('#obs-url').inputValue();
   expect(url).toContain('m=countdown'); expect(url).toContain('ct='); expect(url).not.toContain('ot=');
   const results = await new AxeBuilder({ page }).analyze();
@@ -25,7 +24,7 @@ test('builds an accessible countdown that reproduces in wide and compact OBS lay
   const widget = await context.newPage();
   for (const viewport of [{ width: 1920, height: 300 }, { width: 800, height: 240 }]) {
     await widget.setViewportSize(viewport); await widget.goto(url);
-    await expect(widget.locator('.clock-line').first()).toHaveText(/^(1d 23:59|2d 00:00):\d{2}$/);
+    await expect(widget.locator('.clock-line').first()).toHaveText(/^00:0[89]:\d{2}$/);
     expect(await widget.evaluate(() => ({ x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight }))).toEqual({ x: 0, y: 0 });
     expect(await widget.evaluate(() => [getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('#clock-root')!).backgroundColor])).toEqual(['rgba(0, 0, 0, 0)','rgba(0, 0, 0, 0)']);
   }

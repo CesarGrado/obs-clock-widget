@@ -13,22 +13,59 @@ describe('clock editor', () => {
   it('configures an absolute event countdown and displays its resolved target', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
-    const mode = app.querySelector<HTMLSelectElement>('#mode')!; mode.value = 'countdown'; mode.dispatchEvent(new Event('change', { bubbles: true }));
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
     const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
     target.value = '2026-08-24T18:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
     const url = (app.querySelector('#obs-url') as HTMLInputElement).value;
     expect(url).toContain('m=countdown&ct=2026-08-24T18%3A30%3A00Z');
-    expect(app.querySelector('#resolved-target')?.textContent).toContain('2026');
+    expect(app.querySelector('#resolved-target')?.textContent).toMatch(/^Ends \w+day, .+ · .+ remaining$/);
     expect(app.querySelector('#preview-root .clock-line')?.textContent).toMatch(/^2d 06:30:/);
-    expect((app.querySelector('#overtime') as HTMLInputElement).checked).toBe(false);
+    expect((app.querySelector('#post-zero-clock') as HTMLInputElement).checked).toBe(true);
+    expect((app.querySelector('#post-zero-overtime') as HTMLInputElement).checked).toBe(false);
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('starts a quick 10-minute countdown from an absolute target', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#quick-10') as HTMLButtonElement).click();
+    const url = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    expect(url).toContain('m=countdown&ct=2026-08-22T12%3A10%3A00Z');
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('10 minutes remaining');
+    expect(app.querySelector<HTMLInputElement>('#countdown-date')!.value).toBe('2026-08-22');
+    expect(app.querySelector<HTMLInputElement>('#countdown-time')!.value).toBe('12:10');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('schedules a specific date and time with friendly validation', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = '2026-08-24'; date.dispatchEvent(new Event('change', { bubbles: true }));
+    time.value = '18:30'; time.dispatchEvent(new Event('change', { bubbles: true }));
+    const url = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    expect(url).toContain('m=countdown&ct=2026-08-24T18%3A30%3A00');
+    date.value = '2027-08-24'; date.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('switches post-zero behavior with plain-language radios', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const overtime = app.querySelector<HTMLInputElement>('#post-zero-overtime')!; overtime.checked = true; overtime.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ot=1');
+    const clock = app.querySelector<HTMLInputElement>('#post-zero-clock')!; clock.checked = true; clock.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).not.toContain('ot=1');
     editor.destroy(); vi.useRealTimers();
   });
   it('rejects naive or targets beyond the 99-day editor limit', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
     const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
     target.value = '2026-08-24T18:30'; target.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(app.querySelector('#countdown-error')?.textContent).toContain('explicit');
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('offset');
     target.value = '2027-08-24T18:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
     expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
     editor.destroy(); vi.useRealTimers();

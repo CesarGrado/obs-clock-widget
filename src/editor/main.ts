@@ -22,6 +22,14 @@ const fontSelect = (id: string) => { const node = element('select', { id }); FON
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
 const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
 
+const resolveTimezoneOffsetMs = (instant: Date, timeZone: string): number => {
+  // Offset (ms to add to a local wall-clock time in `timeZone` to get UTC) via the z/ZZ hour-minute pattern.
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(instant);
+  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
+  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
+  return asUtc - instant.getTime();
+};
+
 const FORMAT_PRESETS = [
   ['', 'Custom'],
   ['HH:mm:ss', '24-hour with seconds — HH:mm:ss'],
@@ -50,13 +58,36 @@ function buildEditor(app: HTMLElement) {
   const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
   const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
   const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset);
-  const mode = element('select', { id: 'mode' }); mode.append(option('clock', 'Clock'), option('countdown', 'Event countdown')); labeled(global, 'Mode', mode);
-  const countdownControls = element('div', { id: 'countdown-controls', class: 'countdown-controls' });
-  const target = input('countdown-target', 'text'); target.maxLength = 32; target.placeholder = '2026-08-23T18:30:00Z'; target.setAttribute('aria-describedby', 'countdown-help countdown-error resolved-target');
-  labeled(countdownControls, 'Target (ISO 8601)', target);
-  countdownControls.append(element('p', { id: 'countdown-help', class: 'help' }, 'Use an absolute time ending in Z or an explicit offset, up to 99 days ahead.'), element('p', { id: 'countdown-error', class: 'error', role: 'alert' }));
-  const overtime = input('overtime', 'checkbox'); labeled(countdownControls, 'Count up after zero (overtime)', overtime);
-  countdownControls.append(element('p', { id: 'resolved-target', class: 'help', 'aria-live': 'polite' })); global.append(countdownControls);
+  const modeCards = element('div', { id: 'mode-cards', class: 'mode-cards', role: 'radiogroup', 'aria-label': 'Widget mode' });
+  const modeCard = (value: 'clock' | 'countdown', title: string, hint: string) => {
+    const radio = element('input', { type: 'radio', id: `mode-${value}`, name: 'mode', value, class: 'mode-radio', 'aria-label': title });
+    const card = element('label', { for: `mode-${value}`, class: 'mode-card' });
+    card.append(radio, element('span', { class: 'mode-card-title' }, title), element('span', { class: 'mode-card-hint' }, hint));
+    return card;
+  };
+  modeCards.append(modeCard('clock', 'Clock', 'Shows the current time'), modeCard('countdown', 'Countdown', 'Counts down to a moment you pick'));
+  global.append(modeCards);
+  const countdownSetup = element('fieldset', { id: 'countdown-setup', class: 'countdown-setup' });
+  countdownSetup.append(element('legend', {}, 'Countdown'));
+  countdownSetup.append(element('p', { id: 'countdown-help', class: 'help' }, 'Pick when your countdown ends — quick minutes from now, or a specific date and time.'));
+  const quick = element('div', { id: 'countdown-quick', class: 'quick-buttons', role: 'group', 'aria-label': 'Quick durations' });
+  [5, 10, 15, 30, 60].forEach((minutes) => quick.append(element('button', { type: 'button', class: 'quick-button', id: `quick-${minutes}`, 'data-minutes': String(minutes) }, `${minutes} min`)));
+  countdownSetup.append(quick);
+  const schedule = element('div', { class: 'schedule-row' });
+  const scheduleDate = input('countdown-date', 'date'); const scheduleTime = input('countdown-time', 'time'); scheduleTime.setAttribute('step', '60');
+  labeled(schedule, 'Ends on', scheduleDate); labeled(schedule, 'At', scheduleTime); labeled(schedule, 'Timezone', element('output', { id: 'countdown-timezone', class: 'timezone-note', for: 'timezone' }));
+  countdownSetup.append(schedule, element('p', { id: 'resolved-target', class: 'resolved-summary', 'aria-live': 'polite' }), element('p', { id: 'countdown-error', class: 'error', role: 'alert' }));
+  const postZero = element('fieldset', { class: 'post-zero' }); postZero.append(element('legend', {}, 'When it reaches zero'));
+  postZero.append(element('label', { for: 'post-zero-clock' }, 'Return to clock after 5 seconds'), element('input', { type: 'radio', id: 'post-zero-clock', name: 'post-zero', value: 'clock', class: 'post-zero-radio', checked: '' }));
+  postZero.append(element('label', { for: 'post-zero-overtime' }, 'Continue counting up'), element('input', { type: 'radio', id: 'post-zero-overtime', name: 'post-zero', value: 'overtime', class: 'post-zero-radio' }));
+  countdownSetup.append(postZero);
+  const advanced = element('details', { id: 'countdown-advanced', class: 'advanced' });
+  advanced.append(element('summary', {}, 'Advanced: edit exact end time'));
+  const target = input('countdown-target', 'text'); target.maxLength = 32; target.placeholder = '2026-08-23T18:30:00Z'; target.setAttribute('aria-describedby', 'countdown-advanced-help countdown-error resolved-target');
+  labeled(advanced, 'Target (ISO 8601)', target);
+  advanced.append(element('p', { id: 'countdown-advanced-help', class: 'help' }, 'Technical users only: absolute time ending in Z or an explicit offset, up to 99 days ahead. Paste this to recover or share an exact end time.'));
+  countdownSetup.append(advanced);
+  global.append(countdownSetup);
   const timezoneWrap = element('div', { class: 'timezone-picker' });
   const timezone = input('timezone', 'text');
   timezone.setAttribute('role', 'combobox'); timezone.setAttribute('autocomplete', 'off'); timezone.setAttribute('aria-autocomplete', 'list'); timezone.setAttribute('aria-controls', 'timezone-options'); timezone.setAttribute('aria-expanded', 'false'); timezone.setAttribute('aria-describedby', 'timezone-help timezone-error');
@@ -91,8 +122,22 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
     control.value = String(clampWeight(fontId, weight));
   };
   const syncFormatPreset = (n: number, format: string) => { const preset = byId<HTMLSelectElement>(`line${n}-format-preset`); preset.value = Array.from(preset.options).some(({ value }) => value === format) ? format : ''; };
+  const targetToDateTime = (iso: string) => {
+    const date = new Date(iso); if (Number.isNaN(date.getTime())) return;
+    const timeZone = config.timezone === 'local' ? undefined : config.timezone;
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+    const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+    byId<HTMLInputElement>('countdown-date').value = `${get('year')}-${get('month')}-${get('day')}`;
+    byId<HTMLInputElement>('countdown-time').value = `${get('hour')}:${get('minute')}`;
+  };
   const sync = () => {
-    byId<HTMLSelectElement>('mode').value = config.mode; byId<HTMLInputElement>('countdown-target').value = config.countdownTarget; byId<HTMLInputElement>('overtime').checked = config.overtime; byId('countdown-controls').hidden = config.mode !== 'countdown';
+    (byId<HTMLInputElement>('mode-clock')).checked = config.mode === 'clock'; (byId<HTMLInputElement>('mode-countdown')).checked = config.mode === 'countdown';
+    byId<HTMLInputElement>('countdown-target').value = config.countdownTarget;
+    if (config.mode === 'countdown' && config.countdownTarget) targetToDateTime(config.countdownTarget);
+    byId<HTMLInputElement>('post-zero-clock').checked = !config.overtime; byId<HTMLInputElement>('post-zero-overtime').checked = config.overtime;
+    byId('countdown-setup').hidden = config.mode !== 'countdown';
+    byId('countdown-timezone').textContent = config.timezone === 'local' ? 'This device' : config.timezone;
+    app.querySelectorAll<HTMLLabelElement>('.mode-card').forEach((card) => card.classList.toggle('active', card.querySelector('input')?.checked === true));
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
@@ -102,26 +147,64 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   const refresh = () => {
     clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.';
     const resolved = byId('resolved-target');
-    if (config.mode === 'countdown' && isAbsoluteIsoTarget(config.countdownTarget)) { const lang = config.locale === 'auto' ? undefined : config.locale; const timeZone = config.timezone === 'local' ? undefined : config.timezone; resolved.textContent = `Resolved target: ${new Intl.DateTimeFormat(lang, { dateStyle: 'full', timeStyle: 'long', timeZone }).format(new Date(config.countdownTarget))}`; } else resolved.textContent = '';
+    if (config.mode === 'countdown' && isAbsoluteIsoTarget(config.countdownTarget)) {
+      const lang = config.locale === 'auto' ? undefined : config.locale; const timeZone = config.timezone === 'local' ? undefined : config.timezone;
+      const end = new Date(config.countdownTarget);
+      const when = new Intl.DateTimeFormat(lang, { weekday: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(end);
+      const totalSeconds = Math.round((end.getTime() - Date.now()) / 1000);
+      const remaining = totalSeconds > 0 ? (totalSeconds >= 3600 ? `${Math.round(totalSeconds / 60)} minutes` : totalSeconds >= 60 ? `${Math.round(totalSeconds / 60)} minutes` : `${totalSeconds} seconds`) : 'Ending now';
+      resolved.textContent = `Ends ${when} · ${remaining} remaining`;
+    } else resolved.textContent = '';
   };
   const timezoneInput = byId<HTMLInputElement>('timezone'); const timezoneOptions = byId('timezone-options'); let activeTimezone = -1; let visibleTimezones: TimezoneId[] = [];
-  byId<HTMLSelectElement>('mode').addEventListener('change', (event) => {
-    config.mode = (event.target as HTMLSelectElement).value as typeof config.mode;
-    if (config.mode === 'countdown' && !config.countdownTarget) config.countdownTarget = new Date(Date.now() + 3_600_000).toISOString().replace('.000Z', 'Z');
+  const setCountdownTarget = (iso: string) => {
+    config.countdownTarget = iso;
+    byId<HTMLInputElement>('countdown-target').value = iso;
+    targetToDateTime(iso);
+    byId('countdown-error').textContent = '';
+    byId<HTMLSelectElement>('preset').value = 'Custom';
+    refresh();
+  };
+  const modeRadios = app.querySelectorAll<HTMLInputElement>('input[name="mode"]');
+  modeRadios.forEach((radio) => radio.addEventListener('change', (event) => {
+    config.mode = (event.target as HTMLInputElement).value as typeof config.mode;
+    if (config.mode === 'countdown' && !config.countdownTarget) setCountdownTarget(new Date(Date.now() + 3_600_000).toISOString().replace('.000Z', 'Z'));
     if (config.mode === 'clock') { config.countdownTarget = ''; config.overtime = false; }
     byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
-  });
+  }));
+  app.querySelectorAll<HTMLButtonElement>('.quick-button').forEach((button) => button.addEventListener('click', () => {
+    const minutes = Number(button.dataset.minutes);
+    setCountdownTarget(new Date(Date.now() + minutes * 60_000).toISOString().replace('.000Z', 'Z'));
+  }));
+  const scheduleFromInputs = () => {
+    const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
+    if (!dateValue) return;
+    const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
+    const candidate = new Date(Date.UTC(year!, (month ?? 1) - 1, day!, hour ?? 0, minute ?? 0));
+    const timeZone = config.timezone === 'local' ? undefined : config.timezone;
+    const offsetMs = timeZone ? resolveTimezoneOffsetMs(candidate, timeZone) : -candidate.getTimezoneOffset() * 60_000;
+    const absolute = new Date(candidate.getTime() - offsetMs);
+    const iso = `${absolute.toISOString().slice(0, 19)}Z`;
+    if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time for your countdown.'; return; }
+    if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
+    setCountdownTarget(iso);
+  };
+  byId<HTMLInputElement>('countdown-date').addEventListener('change', scheduleFromInputs);
+  byId<HTMLInputElement>('countdown-time').addEventListener('change', scheduleFromInputs);
+  app.querySelectorAll<HTMLInputElement>('input[name="post-zero"]').forEach((radio) => radio.addEventListener('change', (event) => {
+    config.overtime = (event.target as HTMLInputElement).value === 'overtime';
+    byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+  }));
   byId<HTMLInputElement>('countdown-target').addEventListener('input', (event) => {
     const value = (event.target as HTMLInputElement).value.trim(); const error = byId('countdown-error');
-    if (!isAbsoluteIsoTarget(value)) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Enter an ISO target with an explicit Z or ±HH:mm offset.'; return; }
-    if (Date.parse(value) - Date.now() > 99 * 86_400_000) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Choose a target no more than 99 days ahead.'; return; }
-    (event.target as HTMLInputElement).removeAttribute('aria-invalid'); error.textContent = ''; config.countdownTarget = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+    if (!isAbsoluteIsoTarget(value)) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Enter an exact end time with a Z or ±HH:mm offset (e.g. 2026-08-23T18:30:00Z).'; return; }
+    if (Date.parse(value) - Date.now() > 99 * 86_400_000) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
+    (event.target as HTMLInputElement).removeAttribute('aria-invalid'); error.textContent = ''; config.countdownTarget = value; targetToDateTime(value); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   });
-  byId<HTMLInputElement>('overtime').addEventListener('change', (event) => { config.overtime = (event.target as HTMLInputElement).checked; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); });
   const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };
   const chooseTimezone = (timezone: TimezoneId) => {
     if (!isTimezoneSupported(timezone)) { byId('timezone-error').textContent = 'This timezone is not supported by the current browser. Choose another timezone.'; closeTimezoneOptions(); return; }
-    config.timezone = timezone; timezoneInput.value = timezone; byId('timezone-error').textContent = ''; byId<HTMLSelectElement>('preset').value = 'Custom'; closeTimezoneOptions(); refresh();
+    config.timezone = timezone; timezoneInput.value = timezone; byId('timezone-error').textContent = ''; byId<HTMLSelectElement>('preset').value = 'Custom'; closeTimezoneOptions(); if (config.mode === 'countdown' && config.countdownTarget) { targetToDateTime(config.countdownTarget); byId('countdown-timezone').textContent = timezone; } refresh();
   };
   const showTimezoneOptions = (query: string) => {
     const descriptions = searchTimezones(query); visibleTimezones = descriptions.map(({ id }) => id); activeTimezone = -1; timezoneInput.removeAttribute('aria-activedescendant'); timezoneOptions.replaceChildren();
