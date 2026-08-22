@@ -30,6 +30,10 @@ npm run test:e2e
 
 The fragment is readable, not encrypted. It contains visual settings only and is not sent to the static host. The app uses no account, cookies, storage, analytics, telemetry, service worker, or third-party runtime network calls.
 
+### Presets
+
+The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting points. **Gameplay** uses a large white clock with a bold black outline and an uppercase yellow date for readability over fast-changing bright and dark footage. Start with a **1920 × 300** or **800 × 240** Browser Source; reduce Stroke if the outline feels heavy at a smaller scale.
+
 ### Recover or edit an existing clock
 
 In the editor's **Output** section, paste either the complete generated OBS URL or only its `v=1&...` fragment into **Load existing OBS URL or fragment**, then select **Load** (or press Enter). A successful import replaces the editor settings; change any value and copy the newly generated URL back into OBS.

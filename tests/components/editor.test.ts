@@ -16,6 +16,25 @@ describe('clock editor', () => {
     expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#7c5cfc');
     (app.querySelector('#reset') as HTMLButtonElement).click(); expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#ffffff'); editor.destroy();
   });
+  it('applies the Gameplay preset to every relevant editor control', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    const value = (id: string) => (app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!).value;
+    expect({
+      timezone: value('timezone'), locale: value('locale'), align: value('align'), gap: value('gap'), stroke: value('stroke'), shadow: value('shadow'),
+      format1: value('line1-format'), font1: value('line1-font'), size1: value('line1-size'), weight1: value('line1-weight'), color1: value('line1-color'), opacity1: value('line1-opacity'), transform1: value('line1-transform'),
+      format2: value('line2-format'), font2: value('line2-font'), size2: value('line2-size'), weight2: value('line2-weight'), color2: value('line2-color'), opacity2: value('line2-opacity'), transform2: value('line2-transform'),
+    }).toEqual({
+      timezone: 'local', locale: 'auto', align: 'center', gap: '6', stroke: '4', shadow: '0',
+      format1: 'HH:mm:ss', font1: 'system', size1: '80', weight1: '700', color1: '#ffffff', opacity1: '1', transform1: 'none',
+      format2: 'ddd, MMM D', font2: 'system', size2: '28', weight2: '700', color2: '#ffd54a', opacity2: '1', transform2: 'uppercase',
+    });
+    expect((app.querySelector('#line1-enabled') as HTMLInputElement).checked).toBe(true);
+    expect((app.querySelector('#line2-enabled') as HTMLInputElement).checked).toBe(true);
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('gap=6&st=4&sh=0');
+    editor.destroy();
+  });
+
   it('rejects invalid formats without replacing the last preview', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app); const before = app.querySelector('#preview-root')?.textContent;
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));

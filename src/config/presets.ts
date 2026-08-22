@@ -15,6 +15,10 @@ export const PRESETS: Record<string, ClockConfig> = {
     { ...DEFAULT_CONFIG.lines[0], font: 'retro', size: 84, color: '#FFB000' },
     { ...DEFAULT_CONFIG.lines[1], font: 'mono', color: '#FFB000', transform: 'uppercase' },
   ] }),
+  Gameplay: withChanges({ gap: 6, stroke: 4, shadow: 0, lines: [
+    { ...DEFAULT_CONFIG.lines[0], size: 80 },
+    { ...DEFAULT_CONFIG.lines[1], format: 'ddd, MMM D', size: 28, weight: 700, color: '#FFD54A', opacity: 1, transform: 'uppercase' },
+  ] }),
   Puzzlr: withChanges({ gap: 12, stroke: 1, shadow: 8, lines: [
     { ...DEFAULT_CONFIG.lines[0], font: 'display', size: 92, color: '#7C5CFC' },
     { ...DEFAULT_CONFIG.lines[1], font: 'display', size: 32, color: '#35D7B7', transform: 'uppercase' },
