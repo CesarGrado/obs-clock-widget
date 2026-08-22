@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CONFIG } from '../../src/config/defaults';
+import { decodeConfig } from '../../src/config/codec';
 import { renderClock } from '../../src/clock/renderer';
 
 describe('safe clock renderer', () => {
@@ -35,6 +36,15 @@ describe('safe clock renderer', () => {
     expect(root.querySelector('.clock-line')?.textContent).toBe('00:00:00');
     instant = new Date('2026-08-22T10:00:05.000Z'); controller.update();
     expect(root.querySelector('.clock-line')?.textContent).toBe('10:00:05');
+    controller.stop();
+  });
+  it('preserves the frozen legacy v1 DOM fixture when countdown keys are absent', () => {
+    const root = document.createElement('div');
+    const config = decodeConfig('v=1&tz=UTC&f1=HH%3Amm%3Ass&e2=0');
+    const controller = renderClock(root, config, () => new Date('2026-08-22T13:15:51Z'));
+    expect(root.textContent).toBe('13:15:51');
+    expect(root.querySelectorAll('.clock-line')).toHaveLength(1);
+    expect(root.querySelector('.clock-line')?.getAttribute('style')).toBe('font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 72px; font-weight: 700; color: rgb(255, 255, 255); opacity: 1; text-transform: none; -webkit-text-stroke: 0px; text-shadow: 0 1px 2px rgba(0,0,0,.85);');
     controller.stop();
   });
   it('fails safely when the runtime Intl data does not support a catalog timezone', () => {

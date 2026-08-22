@@ -59,8 +59,8 @@ function buildEditor(app: HTMLElement) {
   const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
   const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
   const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset);
-  labeled(global, 'Mode', select('mode', ['clock','countdown']));
-  const countdownControls = element('div', { id: 'countdown-controls' });
+  const mode = element('select', { id: 'mode' }); mode.append(option('clock', 'Clock'), option('countdown', 'Event countdown')); labeled(global, 'Mode', mode);
+  const countdownControls = element('div', { id: 'countdown-controls', class: 'countdown-controls' });
   const target = input('countdown-target', 'text'); target.maxLength = 32; target.placeholder = '2026-08-23T18:30:00Z'; target.setAttribute('aria-describedby', 'countdown-help countdown-error resolved-target');
   labeled(countdownControls, 'Target (ISO 8601)', target);
   countdownControls.append(element('p', { id: 'countdown-help', class: 'help' }, 'Use an absolute time ending in Z or an explicit offset, up to 99 days ahead.'), element('p', { id: 'countdown-error', class: 'error', role: 'alert' }));
@@ -117,9 +117,9 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   });
   byId<HTMLInputElement>('countdown-target').addEventListener('input', (event) => {
     const value = (event.target as HTMLInputElement).value.trim(); const error = byId('countdown-error');
-    if (!isAbsoluteIsoTarget(value)) { error.textContent = 'Enter an ISO target with an explicit Z or ±HH:mm offset.'; return; }
-    if (Date.parse(value) - Date.now() > 99 * 86_400_000) { error.textContent = 'Choose a target no more than 99 days ahead.'; return; }
-    error.textContent = ''; config.countdownTarget = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+    if (!isAbsoluteIsoTarget(value)) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Enter an ISO target with an explicit Z or ±HH:mm offset.'; return; }
+    if (Date.parse(value) - Date.now() > 99 * 86_400_000) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Choose a target no more than 99 days ahead.'; return; }
+    (event.target as HTMLInputElement).removeAttribute('aria-invalid'); error.textContent = ''; config.countdownTarget = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   });
   byId<HTMLInputElement>('overtime').addEventListener('change', (event) => { config.overtime = (event.target as HTMLInputElement).checked; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); });
   const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };

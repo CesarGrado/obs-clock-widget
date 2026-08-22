@@ -28,7 +28,7 @@ export type ConfigImportResult =
   | { ok: true; config: ClockConfig }
   | { ok: false; code: ConfigImportErrorCode };
 
-const keys = ['v','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
+const keys = ['v','m','ct','ot','tz','loc','a','gap','st','sh','e1','f1','ft1','s1','w1','c1','o1','tr1','e2','f2','ft2','s2','w2','c2','o2','tr2'] as const;
 const allowedKeys: ReadonlySet<string> = new Set(keys);
 const forbiddenKeys: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype']);
 const fullUrlLike = /^[A-Za-z][A-Za-z\d+.-]*:/;
@@ -77,6 +77,13 @@ export function parseConfigImport(value: string, currentOrigin = window.location
     if (version !== '1') return /^\d+$/.test(version ?? '') && version !== null ? error('unsupported-version') : error('invalid-value');
 
     const config = cloneClockConfig(DEFAULT_CONFIG);
+    if (params.has('m')) config.mode = params.get('m') as ClockConfig['mode'];
+    if (params.has('ct')) config.countdownTarget = params.get('ct')!;
+    if (params.has('ot')) {
+      const overtime = params.get('ot');
+      if (overtime !== '0' && overtime !== '1') throw new Error('invalid');
+      config.overtime = overtime === '1';
+    }
     if (params.has('tz')) config.timezone = params.get('tz') as ClockConfig['timezone'];
     if (params.has('loc')) config.locale = params.get('loc') as ClockConfig['locale'];
     if (params.has('a')) config.align = params.get('a') as ClockConfig['align'];

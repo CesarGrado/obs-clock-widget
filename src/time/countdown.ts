@@ -22,8 +22,8 @@ export function isAbsoluteIsoTarget(value: string): boolean {
     && Number(hour) <= 23 && Number(minute) <= 59 && Number(second) <= 59;
 }
 
-function durationText(milliseconds: number, locale: string, prefix = ''): string {
-  const totalSeconds = Math.floor(milliseconds / 1_000);
+function durationText(milliseconds: number, locale: string, prefix = '', roundUp = false): string {
+  const totalSeconds = (roundUp ? Math.ceil : Math.floor)(milliseconds / 1_000);
   const days = Math.floor(totalSeconds / 86_400);
   const hours = Math.floor(totalSeconds % 86_400 / 3_600);
   const minutes = Math.floor(totalSeconds % 3_600 / 60);
@@ -38,7 +38,7 @@ export function countdownDisplay(target: string, now: Date, overtime: boolean, l
   if (!isAbsoluteIsoTarget(target)) return { kind: 'clock' };
   const remaining = Date.parse(target) - now.getTime();
   if (remaining > 99 * DAY_MS) return { kind: 'countdown', text: '99d+' };
-  if (remaining > 0) return { kind: 'countdown', text: durationText(remaining, locale) };
+  if (remaining > 0) return { kind: 'countdown', text: durationText(remaining, locale, '', true) };
   const elapsed = -remaining;
   if (elapsed < HOLD_MS) return { kind: 'hold', text: '00:00:00' };
   if (overtime) return { kind: 'overtime', text: durationText(elapsed, locale, '+') };

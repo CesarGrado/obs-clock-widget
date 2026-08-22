@@ -4,6 +4,13 @@ import { parseConfigImport } from '../../src/config/import';
 import { PRESETS } from '../../src/config/presets';
 
 describe('strict config import', () => {
+  it('imports a canonical event countdown URL with explicit overtime', () => {
+    const input = 'https://obs-clock-widget.pages.dev/v1/clock/#v=1&m=countdown&ct=2026-08-24T18%3A30%3A00Z&ot=1';
+    const result = parseConfigImport(input, 'https://obs-clock-widget.pages.dev');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.config).toMatchObject({ mode: 'countdown', countdownTarget: '2026-08-24T18:30:00Z', overtime: true });
+  });
+
   it.each([
     'v=1&tz=Pacific%2FChatham&f1=HH%3Amm+%27NZ%27',
     '#v=1&tz=Pacific%2FChatham&f1=HH%3Amm+%27NZ%27',

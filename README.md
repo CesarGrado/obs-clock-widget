@@ -32,6 +32,12 @@ Choose the matching **OBS Browser Source size** in the editor before selecting *
 
 The fragment is readable, not encrypted. It contains visual settings only and is not sent to the static host. The app uses no account, cookies, storage, analytics, telemetry, service worker, or third-party runtime network calls.
 
+### Event countdown and overtime
+
+Choose **Event Countdown** mode to turn Line 1 into a reload-safe countdown for a stream start, break, tournament, or launch. Enter an absolute ISO 8601 target ending in `Z` or an explicit offset such as `2026-08-23T18:30:00-04:00`; local timestamps without an offset are rejected. The editor shows the resolved instant in the selected timezone and limits newly entered targets to 99 days ahead. Line 2 remains independently configurable—wrap a label such as `'Stream starts soon'` in single quotes.
+
+Countdowns longer than 24 hours use `d HH:mm:ss`. At zero, the overlay holds `00:00:00` for five seconds and then resumes the configured Line 1 clock. **Count up after zero (overtime)** is available as an explicit opt-in and is off by default. The target is derived from wall-clock time on every load; nothing is stored, and malformed countdown fragments fail safely to the default clock. Existing URLs without countdown parameters retain the legacy clock rendering path.
+
 ### Presets
 
 The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting points. **Minimal** is a single-line monospaced `HH:mm` clock with a soft shadow, designed to stay visually steady as digits change without reserving space for a date. **Gameplay** uses a large white clock with a bold black outline and an uppercase yellow date for readability over fast-changing bright and dark footage. Start with a **1920 × 300** or **800 × 240** Browser Source; reduce Gameplay's Stroke if the outline feels heavy at a smaller scale.

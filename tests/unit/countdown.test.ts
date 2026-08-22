@@ -27,6 +27,7 @@ describe('event countdown', () => {
 
   it('holds zero for exactly five seconds then resumes the clock', () => {
     const target = '2026-08-22T10:00:00Z';
+    expect(countdownDisplay(target, new Date('2026-08-22T09:59:59.999Z'), false, 'en-US')).toEqual({ kind: 'countdown', text: '00:00:01' });
     expect(countdownDisplay(target, new Date('2026-08-22T10:00:04.999Z'), false, 'en-US')).toEqual({ kind: 'hold', text: '00:00:00' });
     expect(countdownDisplay(target, new Date('2026-08-22T10:00:05.000Z'), false, 'en-US')).toEqual({ kind: 'clock' });
   });

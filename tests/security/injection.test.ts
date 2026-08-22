@@ -10,4 +10,9 @@ describe('injection boundary', () => {
     const root = document.createElement('div'); const controller = renderClock(root, config, () => new Date(0));
     expect(root.innerHTML).not.toContain(payload); expect(root.querySelectorAll('*')).toHaveLength(3); expect(config).toEqual(DEFAULT_CONFIG); controller.stop();
   });
+  it.each(payloads)('rejects countdown-target injection payloads: %s', (payload) => {
+    const config = decodeConfig(`v=1&m=countdown&ct=${encodeURIComponent(payload)}`);
+    const root = document.createElement('div'); const controller = renderClock(root, config, () => new Date(0));
+    expect(config).toEqual(DEFAULT_CONFIG); expect(root.innerHTML).not.toContain(payload); expect(root.querySelector('script,img')).toBeNull(); controller.stop();
+  });
 });

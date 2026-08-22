@@ -28,6 +28,7 @@ describe('fragment codec', () => {
     'v=1&m=countdown&ct=tomorrow',
     'v=1&m=countdown&ct=2026-08-23T18%3A30Z&ct=2026-08-24T18%3A30Z',
     'v=1&m=countdown&ct=2026-08-23T18%3A30Z&ot=2',
+    'v=1&ot=1',
   ])('fails safely for invalid countdown fragment %s', (fragment) => expect(decodeConfig(fragment)).toEqual(DEFAULT_CONFIG));
   it('keeps the legacy canonical fragment byte-identical', () => expect(encodeConfig(decodeConfig('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'))).toBe('v=1&tz=America%2FNew_York&f1=hh%3Amm%3Ass+a'));
   it('never throws for arbitrary payloads', () => fc.assert(fc.property(fc.string(), (payload) => { expect(() => decodeConfig(payload)).not.toThrow(); }), { numRuns: 200 }));

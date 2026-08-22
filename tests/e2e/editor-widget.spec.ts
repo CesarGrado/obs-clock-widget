@@ -10,6 +10,27 @@ test('editor config reproduces in the permanent widget route', async ({ page, co
   expect(await widget.evaluate(() => ({ x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight }))).toEqual({ x: 0, y: 0 });
 });
 
+test('builds an accessible countdown that reproduces in wide and compact OBS layouts', async ({ page, context }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('Mode').selectOption('countdown');
+  const target = new Date(Date.now() + 2 * 86_400_000).toISOString().replace('.000Z', 'Z');
+  await page.getByLabel('Target (ISO 8601)').fill(target);
+  await expect(page.locator('#resolved-target')).toContainText('Resolved target:');
+  await expect(page.locator('#preview-root .clock-line').first()).toHaveText(/^(1d 23:59|2d 00:00):\d{2}$/);
+  const url = await page.locator('#obs-url').inputValue();
+  expect(url).toContain('m=countdown'); expect(url).toContain('ct='); expect(url).not.toContain('ot=');
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious','critical'].includes(violation.impact ?? ''))).toEqual([]);
+
+  const widget = await context.newPage();
+  for (const viewport of [{ width: 1920, height: 300 }, { width: 800, height: 240 }]) {
+    await widget.setViewportSize(viewport); await widget.goto(url);
+    await expect(widget.locator('.clock-line').first()).toHaveText(/^(1d 23:59|2d 00:00):\d{2}$/);
+    expect(await widget.evaluate(() => ({ x: document.documentElement.scrollWidth - innerWidth, y: document.documentElement.scrollHeight - innerHeight }))).toEqual({ x: 0, y: 0 });
+    expect(await widget.evaluate(() => [getComputedStyle(document.body).backgroundColor, getComputedStyle(document.querySelector('#clock-root')!).backgroundColor])).toEqual(['rgba(0, 0, 0, 0)','rgba(0, 0, 0, 0)']);
+  }
+});
+
 test('imports a production OBS URL, edits it, and opens the regenerated widget accessibly', async ({ page, context }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.goto('/editor/');

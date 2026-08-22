@@ -31,4 +31,10 @@ describe('Chrome/CEF 87 compatibility', () => {
     expect(decodeConfig('#v=1')).toEqual(DEFAULT_CONFIG);
     expect(PRESETS.Minimal).toBeDefined();
   });
+
+  it('uses countdown primitives available in Chrome/CEF 87', async () => {
+    const { countdownDisplay, isAbsoluteIsoTarget } = await import('../../src/time/countdown');
+    expect(isAbsoluteIsoTarget('2026-08-23T18:30:00Z')).toBe(true);
+    expect(countdownDisplay('2026-08-24T18:30:00Z', new Date('2026-08-22T13:15:51Z'), false, 'en-US')).toEqual({ kind: 'countdown', text: '2d 05:14:09' });
+  });
 });

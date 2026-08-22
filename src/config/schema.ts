@@ -23,7 +23,7 @@ export function normalizeConfig(input: unknown): ClockConfig {
   const value = input as Record<string, unknown>;
   if (own(value, '__proto__') || own(value, 'constructor') || own(value, 'prototype') || value.version !== 1
     || !inList(['clock', 'countdown'] as const, value.mode) || typeof value.countdownTarget !== 'string' || typeof value.overtime !== 'boolean'
-    || (value.mode === 'countdown' && !isAbsoluteIsoTarget(value.countdownTarget)) || (value.mode === 'clock' && value.countdownTarget !== '')
+    || (value.mode === 'countdown' && !isAbsoluteIsoTarget(value.countdownTarget)) || (value.mode === 'clock' && (value.countdownTarget !== '' || value.overtime))
     || !inList(TIMEZONES, value.timezone) || !inList(LOCALES, value.locale) || !inList(['left', 'center', 'right'] as const, value.align)
     || typeof value.gap !== 'number' || !Number.isFinite(value.gap) || value.gap < 0 || value.gap > 80
     || typeof value.stroke !== 'number' || !Number.isFinite(value.stroke) || value.stroke < 0 || value.stroke > 8
