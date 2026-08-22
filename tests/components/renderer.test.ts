@@ -47,6 +47,33 @@ describe('safe clock renderer', () => {
     expect(root.querySelector('.clock-line')?.getAttribute('style')).toBe('font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 72px; font-weight: 700; color: rgb(255, 255, 255); opacity: 1; text-transform: none; -webkit-text-stroke: 0px; text-shadow: 0 1px 2px rgba(0,0,0,.85);');
     controller.stop();
   });
+  it('renders legacy and library font ids from the registry with identical legacy stacks', () => {
+    for (const [id, family] of [
+      ['retro', '"Roboto Mono", ui-monospace, monospace'],
+      ['mono', '"Roboto Mono", ui-monospace, SFMono-Regular, Consolas, monospace'],
+      ['display', 'Montserrat, ui-sans-serif, system-ui, sans-serif'],
+      ['bebas-neue', '"Bebas Neue", ui-sans-serif, system-ui, sans-serif'],
+    ] as const) {
+      const root = document.createElement('div');
+      const config = { ...DEFAULT_CONFIG, lines: [
+        { ...DEFAULT_CONFIG.lines[0], font: id },
+        { ...DEFAULT_CONFIG.lines[1], enabled: false },
+      ] as unknown as typeof DEFAULT_CONFIG.lines };
+      const controller = renderClock(root, config);
+      expect((root.querySelector('.clock-line') as HTMLElement).style.fontFamily).toBe(family);
+      controller.stop();
+    }
+  });
+  it('falls back to the system stack for unknown font ids', () => {
+    const root = document.createElement('div');
+    const config = { ...DEFAULT_CONFIG, lines: [
+      { ...DEFAULT_CONFIG.lines[0], font: 'not-a-real-font' },
+      { ...DEFAULT_CONFIG.lines[1], enabled: false },
+    ] as unknown as typeof DEFAULT_CONFIG.lines };
+    const controller = renderClock(root, config);
+    expect((root.querySelector('.clock-line') as HTMLElement).style.fontFamily).toBe('Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif');
+    controller.stop();
+  });
   it('fails safely when the runtime Intl data does not support a catalog timezone', () => {
     const Original = Intl.DateTimeFormat;
     vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(((locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => {
