@@ -98,6 +98,63 @@ describe('clock editor', () => {
     expect(app.querySelector<HTMLInputElement>('#countdown-time')!.value).toBe('14:45');
     editor.destroy(); vi.useRealTimers();
   });
+  it('round-trips a wall time adjacent to the fall-back transition (02:30 after the shift)', () => {
+    vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'new york'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    // 02:30 on 2026-11-01 exists only in EST (UTC-5) — the post-transition offset — so it must resolve to 07:30Z.
+    date.value = '2026-11-01'; time.value = '02:30';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ct=2026-11-01T07%3A30%3A00Z');
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('rejects a Chatham spring-forward gap wall time', () => {
+    vi.setSystemTime(new Date('2026-09-20T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'chatham'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    // 2026-09-27 02:45 does not exist in Pacific/Chatham (spring forward 02:45→03:45 NZDT->NZST+…): must be rejected, not shifted to 01:45.
+    date.value = '2026-09-27'; time.value = '02:45';
+    date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('does not exist');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('clears stale aria-invalid when a quick duration replaces a malformed target', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = 'not-a-date'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(target.getAttribute('aria-invalid')).toBe('true');
+    (app.querySelector('#quick-10') as HTMLButtonElement).click();
+    expect(target.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('renders a sensible summary for an expired target and updates the summary as time passes', () => {
+    vi.useFakeTimers({ now: new Date('2026-08-22T12:00:00Z'), shouldAdvanceTime: false });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = '2026-08-22T11:30:00Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('It has ended');
+    // Summary ticks: the minute-aligned timer refreshes the text as time passes.
+    target.value = '2026-08-22T12:02:10Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('2 minutes remaining');
+    vi.advanceTimersByTime(71_000); // first aligned tick at +10s, then the interval's tick at +70s
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('1 minute remaining');
+    editor.destroy(); vi.useRealTimers();
+  });
   it('switches post-zero behavior with plain-language radios', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);

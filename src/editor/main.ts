@@ -144,22 +144,42 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); weightOptions(n, line.font, line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
-  const refresh = () => {
-    clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.';
+  const refreshSummary = () => {
     const resolved = byId('resolved-target');
     if (config.mode === 'countdown' && isAbsoluteIsoTarget(config.countdownTarget)) {
       const lang = config.locale === 'auto' ? undefined : config.locale; const timeZone = config.timezone === 'local' ? undefined : config.timezone;
       const end = new Date(config.countdownTarget);
       const when = new Intl.DateTimeFormat(lang, { weekday: 'long', hour: 'numeric', minute: '2-digit', timeZoneName: 'short', timeZone }).format(end);
       const totalSeconds = Math.round((end.getTime() - Date.now()) / 1000);
-      const remaining = totalSeconds > 0 ? (totalSeconds >= 3600 ? `${Math.round(totalSeconds / 60)} minutes` : totalSeconds >= 60 ? `${Math.round(totalSeconds / 60)} minutes` : `${totalSeconds} seconds`) : 'Ending now';
-      resolved.textContent = `Ends ${when} · ${remaining} remaining`;
+      const minutesLeft = Math.round(totalSeconds / 60);
+      const remaining = totalSeconds > 0 ? (minutesLeft >= 1 ? `${minutesLeft} minute${minutesLeft === 1 ? '' : 's'}` : `${totalSeconds} seconds`) : 'It has ended';
+      resolved.textContent = `Ends ${when} · ${remaining}${totalSeconds > 0 ? ' remaining' : ''}`;
     } else resolved.textContent = '';
+  };
+  let summaryTimer: number | undefined;
+  const scheduleSummary = () => {
+    if (summaryTimer !== undefined) { window.clearInterval(summaryTimer); summaryTimer = undefined; }
+    if (config.mode !== 'countdown' || !isAbsoluteIsoTarget(config.countdownTarget)) return;
+    const end = new Date(config.countdownTarget).getTime();
+    // Tick on each whole minute boundary of the remaining time so the summary stays current.
+    const firstDelay = Math.max((end - Date.now()) % 60_000, 250);
+    summaryTimer = window.setTimeout(() => {
+      refreshSummary();
+      summaryTimer = window.setInterval(() => {
+        refreshSummary();
+        if (Date.now() >= end) { window.clearInterval(summaryTimer); summaryTimer = undefined; }
+      }, 60_000) as unknown as number;
+    }, firstDelay) as unknown as number;
+  };
+  const refresh = () => {
+    clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.';
+    refreshSummary(); scheduleSummary();
   };
   const timezoneInput = byId<HTMLInputElement>('timezone'); const timezoneOptions = byId('timezone-options'); let activeTimezone = -1; let visibleTimezones: TimezoneId[] = [];
   const setCountdownTarget = (iso: string) => {
     config.countdownTarget = iso;
-    byId<HTMLInputElement>('countdown-target').value = iso;
+    const targetInput = byId<HTMLInputElement>('countdown-target');
+    targetInput.value = iso; targetInput.removeAttribute('aria-invalid');
     targetToDateTime(iso);
     byId('countdown-error').textContent = '';
     byId<HTMLSelectElement>('preset').value = 'Custom';
@@ -182,8 +202,12 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
     const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
     const candidate = new Date(Date.UTC(year!, (month ?? 1) - 1, day!, hour ?? 0, minute ?? 0));
     const timeZone = config.timezone === 'local' ? undefined : config.timezone;
-    const offsetMs = timeZone ? resolveTimezoneOffsetMs(candidate, timeZone) : -candidate.getTimezoneOffset() * 60_000;
-    const absolute = new Date(candidate.getTime() - offsetMs);
+    // Two-pass offset resolution: wall times adjacent to a DST transition need the offset
+    // of the resolved instant, not the candidate's first guess.
+    const offsetFor = (instant: Date) => timeZone ? resolveTimezoneOffsetMs(instant, timeZone) : -instant.getTimezoneOffset() * 60_000;
+    const firstOffset = offsetFor(candidate);
+    const provisional = new Date(candidate.getTime() - firstOffset);
+    const absolute = new Date(candidate.getTime() - offsetFor(provisional));
     // DST gap check: the chosen wall time must convert back exactly, or the time does not exist (e.g. 02:30 on spring-forward day).
     const back = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(absolute);
     const backGet = (type: string) => Number(back.find((part) => part.type === type)?.value ?? '0');
@@ -291,7 +315,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void } {
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
-  sync(); refresh(); return { destroy: () => clock?.stop() };
+  sync(); refresh(); return { destroy: () => { if (summaryTimer !== undefined) { window.clearTimeout(summaryTimer); window.clearInterval(summaryTimer); } clock?.stop(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);
