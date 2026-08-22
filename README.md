@@ -38,7 +38,7 @@ The editor includes Minimal, Broadcast, Retro, Gameplay, and Puzzlr starting poi
 
 Use **Swap lines** to move the complete Line 1 and Line 2 designs—including format, font, color, size, and enabled state—without rebuilding either line.
 
-Use **Match Line 2 style to Line 1** to copy Line 1's font, size, weight, color, opacity, and transform to Line 2 while preserving Line 2's format and enabled state. This makes a coordinated date or timezone label without re-entering its content settings.
+Use **Match Line 2 style to Line 1** or **Match Line 1 style to Line 2** to copy one line's font, size, weight, color, opacity, and transform to the other while preserving the destination line's format and enabled state. This coordinates a clock and date or timezone label without re-entering content settings.
 
 If **Reset** is selected accidentally, **Undo reset** restores the configuration that was in the editor immediately before the reset. This recovery is available only in the current page session and does not store settings.
 

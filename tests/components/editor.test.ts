@@ -125,6 +125,28 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('matches Line 1 styling to Line 2 without replacing its content settings', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const preset = app.querySelector<HTMLSelectElement>('#preset')!; preset.value = 'Gameplay'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    const change = (id: string, value: string) => { const control = app.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!; control.value = value; control.dispatchEvent(new Event(control instanceof HTMLInputElement && control.type === 'range' ? 'input' : 'change', { bubbles: true })); };
+    change('line2-font', 'mono'); change('line2-opacity', '0.5');
+    (app.querySelector('#line1-enabled') as HTMLInputElement).click();
+
+    (app.querySelector('#match-line1-style') as HTMLButtonElement).click();
+
+    expect((app.querySelector('#line1-enabled') as HTMLInputElement).checked).toBe(false);
+    expect((app.querySelector('#line1-format') as HTMLInputElement).value).toBe('HH:mm:ss');
+    expect((app.querySelector('#line1-font') as HTMLSelectElement).value).toBe('mono');
+    expect((app.querySelector('#line1-size') as HTMLInputElement).value).toBe('28');
+    expect((app.querySelector('#line1-weight') as HTMLSelectElement).value).toBe('700');
+    expect((app.querySelector('#line1-color') as HTMLInputElement).value).toBe('#ffd54a');
+    expect((app.querySelector('#line1-opacity') as HTMLInputElement).value).toBe('0.5');
+    expect((app.querySelector('#line1-transform') as HTMLSelectElement).value).toBe('uppercase');
+    expect((app.querySelector('#preset') as HTMLSelectElement).value).toBe('Custom');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ft1=mono&s1=28&c1=%23FFD54A&o1=0.5&tr1=uppercase');
+    editor.destroy();
+  });
+
   it('offers a 12-hour format preset with seconds', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const preset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;
