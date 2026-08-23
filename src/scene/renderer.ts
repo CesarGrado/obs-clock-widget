@@ -45,6 +45,8 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
   const update = () => {
     const instant = now();
     const display = countdownDisplay(config.countdownTarget, instant, false, 'auto');
+    // Reveal boundary: the 5s zero hold keeps the final countdown frame on screen, then the
+    // message appears. rd=0 -> right after the hold (at zero+5s); each step adds a full minute.
     const pastHold = config.countdownTarget && Date.parse(config.countdownTarget) + 5_000 + config.revealDelay * 60_000 <= instant.getTime();
     number.textContent = display.kind === 'countdown' || display.kind === 'hold' ? display.text : '00:00:00';
     if (pastHold && !revealed) { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); }

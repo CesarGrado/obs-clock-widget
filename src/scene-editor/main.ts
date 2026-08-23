@@ -78,7 +78,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const tz = element('span', { id: 'countdown-timezone', class: 'hint' }); tz.textContent = timezoneLabel();
     schedule.append(tz);
     const delay = element('select', { id: 'reveal-delay', 'aria-label': 'Delay before the zero message appears' });
-    for (const minutes of [0, 1, 2, 3]) delay.append(option(String(minutes), minutes === 0 ? 'Right at zero' : `${minutes} min after zero`));
+    for (const minutes of [0, 1, 2, 3]) delay.append(option(String(minutes), minutes === 0 ? 'At zero (after 5s hold)' : `${minutes} min after zero`));
     labeled(countdown, 'Show zero message', delay);
     countdown.append(quick, schedule, element('p', { id: 'countdown-error', class: 'error', role: 'alert' }), element('p', { id: 'resolved-target', 'aria-live': 'polite', class: 'hint' }));
     app.append(countdown);

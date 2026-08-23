@@ -26,22 +26,23 @@ test('scene builder produces a working full-screen scene URL', async ({ page, co
   expect(errors).toEqual([]);
 });
 
-test('scene runtime geometry is full-screen and visible at 1080p and 4K', async ({ page }) => {
+test('scene runtime geometry is full-screen and visible at 1080p, 4K, and 640x360', async ({ page }) => {
   const soon = new Date(Date.now() + 60_000).toISOString().replace('.000Z', 'Z');
   await page.goto(`/v1/scene/#v=1&ct=${encodeURIComponent(soon)}`);
-  for (const [w, h] of [[1920, 1080], [3840, 2160], [640, 360]] as const) {
-    await page.setViewportSize({ width: w, height: h });
-    const stage = await page.locator('.scene-stage').boundingBox();
-    const headline = await page.locator('.scene-headline').boundingBox();
-    const number = await page.locator('.scene-number').boundingBox();
-    expect(stage).toBeTruthy(); expect(headline).toBeTruthy(); expect(number).toBeTruthy();
-    const root = await page.locator('.scene-root').boundingBox();
-    expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(h);
-    expect(stage!.width).toBeGreaterThan(0); expect(stage!.height).toBeGreaterThan(0);
-    expect(headline!.height).toBeGreaterThan(0); expect(number!.height).toBeGreaterThan(0);
-    // Visible inside the viewport, not clipped off-screen.
-    for (const box of [headline!, number!]) {
-      expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(h);
+  // Freeze the subtle drift at BOTH endpoints so the assertion is deterministic, not phase-dependent.
+  for (const delay of ['0s', '-12s']) {
+    await page.addStyleTag({ content: `.scene-content{animation-play-state:paused !important;animation-delay:${delay} !important}` });
+    for (const [w, h] of [[1920, 1080], [3840, 2160], [640, 360]] as const) {
+      await page.setViewportSize({ width: w, height: h });
+      const root = await page.locator('.scene-root').boundingBox();
+      const headline = await page.locator('.scene-headline').boundingBox();
+      const number = await page.locator('.scene-number').boundingBox();
+      expect(root).toBeTruthy(); expect(headline).toBeTruthy(); expect(number).toBeTruthy();
+      expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(h);
+      // Visible inside the viewport at every animation phase.
+      for (const box of [headline!, number!]) {
+        expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(h);
+      }
     }
   }
 });

@@ -19,6 +19,8 @@
 .scene-reveal.scene-shown{opacity:1;visibility:visible}
 @media (prefers-reduced-motion: reduce){.scene-panel,.scene-reveal{transition:none}}
 .scene-root[data-motion=subtle] .scene-content{animation:scene-drift 24s ease-in-out infinite alternate}
-@keyframes scene-drift{from{transform:translateY(-0.6%) scale(1)}to{transform:translateY(0.6%) scale(1.015)}}
+@keyframes scene-drift{from{transform:translateY(-0.4%) scale(1.004)}to{transform:translateY(0.4%) scale(1.008)}}
+/* Keep animated content inside the safe region at every phase (max ~0.4% shift + 0.8% scale). */
+.scene-content{padding-top:4vh;padding-bottom:4vh}
 @media (prefers-reduced-motion: reduce){.scene-root[data-motion=subtle] .scene-content{animation:none}}
 .scene-error{color:#ff8080;font-family:ui-monospace,monospace;padding:2rem}

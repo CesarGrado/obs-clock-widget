@@ -28,6 +28,8 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   version: 1,
   headline: 'STREAM STARTING SOON',
   subtitle: 'grab a snack, we go live shortly',
+  // Default is a clearly-labeled template target. The editor's quick durations and presets
+  // replace it with a real end time; a freshly opened scene is not silently "counting to 2099".
   countdownTarget: '2099-12-31T23:59:00Z',
   headlineFont: 'display', headlineSize: 96, headlineWeight: 700, headlineColor: '#FFFFFF',
   subtitleFont: 'system', subtitleSize: 36, subtitleWeight: 500, subtitleColor: '#B8C0D8',
@@ -79,4 +81,3 @@ export function normalizeSceneConfig(input: unknown): SceneConfig {
   }
   return normalized;
 }
-
