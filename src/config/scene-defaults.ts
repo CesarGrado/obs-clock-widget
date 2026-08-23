@@ -1,5 +1,6 @@
 import { FONT_IDS, type FontId } from './fonts';
 import { isAbsoluteIsoTarget } from '../time/countdown';
+import { clampWeight } from './fonts';
 import { cloneSceneConfig } from './clone';
 
 export const SCENE_THEMES = ['dark-gradient', 'puzzlr-purple', 'neon-blue', 'sunset', 'minimal-black'] as const;
@@ -27,7 +28,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   version: 1,
   headline: 'STREAM STARTING SOON',
   subtitle: 'grab a snack, we go live shortly',
-  countdownTarget: '2026-08-24T00:00:00Z',
+  countdownTarget: '2099-12-31T23:59:00Z',
   headlineFont: 'display', headlineSize: 96, headlineWeight: 700, headlineColor: '#FFFFFF',
   subtitleFont: 'system', subtitleSize: 36, subtitleWeight: 500, subtitleColor: '#B8C0D8',
   numberFont: 'display', numberSize: 220, numberWeight: 700, numberColor: '#FFFFFF',
@@ -38,6 +39,9 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
 };
 
 const color = /^#[0-9A-Fa-f]{6}$/;
+const KNOWN_SCENE_KEYS = new Set(['version', 'headline', 'subtitle', 'countdownTarget', 'theme', 'motion', 'reveal', 'revealDelay', 'align',
+  'headlineFont', 'headlineSize', 'headlineWeight', 'headlineColor', 'subtitleFont', 'subtitleSize', 'subtitleWeight', 'subtitleColor',
+  'numberFont', 'numberSize', 'numberWeight', 'numberColor', 'revealFont', 'revealSize', 'revealWeight', 'revealColor']);
 const own = (value: object, key: string) => Object.prototype.hasOwnProperty.call(value, key);
 const inList = <T extends readonly unknown[]>(list: T, value: unknown): value is T[number] => list.includes(value);
 
@@ -53,6 +57,7 @@ export function normalizeSceneConfig(input: unknown): SceneConfig {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
   const value = input as Record<string, unknown>;
   if (own(value, '__proto__') || own(value, 'constructor') || own(value, 'prototype') || value.version !== 1
+    || Object.keys(value).some((key) => !KNOWN_SCENE_KEYS.has(key))
     || typeof value.headline !== 'string' || !textOk(value.headline, 1, 48)
     || typeof value.subtitle !== 'string' || !textOk(value.subtitle, 0, 64)
     || typeof value.countdownTarget !== 'string' || !isAbsoluteIsoTarget(value.countdownTarget)
@@ -65,6 +70,13 @@ export function normalizeSceneConfig(input: unknown): SceneConfig {
     const c = el(value, k);
     if (!fontOk(c.font) || !sizeOk(c.size) || !weightOk(c.weight) || !colorOk(c.color)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
   }
-  return cloneSceneConfig(value as unknown as SceneConfig);
+  const normalized = cloneSceneConfig(value as unknown as SceneConfig);
+  // Always clamp each element's weight to the registry of its own font, even when the
+  // weight key was omitted (defaults carried over) — no synthesized browser weights.
+  for (const k of ['headline', 'subtitle', 'number', 'reveal'] as const) {
+    const font = normalized[`${k}Font`];
+    (normalized as Record<string, unknown>)[`${k}Weight`] = clampWeight(font, normalized[`${k}Weight`]);
+  }
+  return normalized;
 }
 

@@ -7,7 +7,8 @@ export type SceneControls = { stop: () => void; update: () => void; showReveal: 
 
 const styled = (node: HTMLElement, font: string, size: number, weight: number, color: string) => {
   node.style.fontFamily = fontFamiliesFor(font as SceneConfig['headlineFont']);
-  node.style.fontSize = `${size}px`; node.style.fontWeight = String(weight); node.style.color = color;
+  node.style.fontWeight = String(weight); node.style.color = color;
+  node.style.setProperty('--size', `${size}px`);
 };
 
 export function renderScene(root: HTMLElement, config: SceneConfig, now: () => Date = () => new Date()): SceneControls {
@@ -44,7 +45,7 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
   const update = () => {
     const instant = now();
     const display = countdownDisplay(config.countdownTarget, instant, false, 'auto');
-    const pastHold = config.countdownTarget && Date.parse(config.countdownTarget) + 5_000 <= instant.getTime();
+    const pastHold = config.countdownTarget && Date.parse(config.countdownTarget) + 5_000 + config.revealDelay * 60_000 <= instant.getTime();
     number.textContent = display.kind === 'countdown' || display.kind === 'hold' ? display.text : '00:00:00';
     if (pastHold && !revealed) { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); }
   };

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderScene } from '../../src/scene/renderer';
 import { DEFAULT_SCENE_CONFIG } from '../../src/config/scene-defaults';
 import { cloneSceneConfig } from '../../src/config/clone';
+import type { SceneConfig } from '../../src/config/scene-defaults';
 
 beforeEach(() => { document.body.innerHTML = '<main id="scene-root"></main>'; });
 
@@ -28,16 +29,28 @@ describe('scene renderer', () => {
   it('shows the zero hold then crossfades to the reveal message', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const root = document.querySelector('#scene-root') as HTMLElement;
-    const config = { ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), countdownTarget: '2026-08-22T12:00:00Z' };
+    const config = { ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), countdownTarget: '2026-08-22T12:00:00Z', revealDelay: 0 } satisfies SceneConfig;
     const controls = renderScene(root, config);
     expect(root.querySelector('.scene-number')?.textContent).toBe('00:00:00');
     expect(root.querySelector('.scene-reveal')?.classList.contains('scene-shown')).toBe(false);
-    controls.update.call(null);
     vi.setSystemTime(new Date('2026-08-22T12:00:06Z'));
     controls.update();
     expect(root.querySelector('.scene-panel')?.classList.contains('scene-hidden')).toBe(true);
     expect(root.querySelector('.scene-reveal')?.classList.contains('scene-shown')).toBe(true);
     expect(root.querySelector('.scene-reveal')?.textContent).toBe("WE'RE LIVE!");
+    controls.stop(); vi.useRealTimers();
+  });
+  it('honors the reveal delay: not shown during the delay window, shown after it', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const root = document.querySelector('#scene-root') as HTMLElement;
+    const config = { ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), countdownTarget: '2026-08-22T12:00:00Z', revealDelay: 2 } satisfies SceneConfig;
+    const controls = renderScene(root, config);
+    vi.setSystemTime(new Date('2026-08-22T12:02:04Z'));
+    controls.update();
+    expect(root.querySelector('.scene-reveal')?.classList.contains('scene-shown')).toBe(false);
+    vi.setSystemTime(new Date('2026-08-22T12:02:06Z'));
+    controls.update();
+    expect(root.querySelector('.scene-reveal')?.classList.contains('scene-shown')).toBe(true);
     controls.stop(); vi.useRealTimers();
   });
   it('supports the zero-state preview toggle controls', () => {

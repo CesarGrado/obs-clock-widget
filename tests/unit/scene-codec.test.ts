@@ -6,6 +6,7 @@ import { cloneSceneConfig } from '../../src/config/clone';
 const base = (): SceneConfig => cloneSceneConfig(DEFAULT_SCENE_CONFIG);
 
 describe('scene codec', () => {
+  const colorLike = (v: string) => /^#[0-9A-Fa-f]{6}$/.test(v);
   it('round-trips a full config', () => {
     const config = { ...base(), headline: 'PUZZLR GAME NIGHT', theme: 'puzzlr-purple', reveal: "LET'S GO!" } satisfies SceneConfig;
     const decoded = decodeSceneConfig(encodeSceneConfig(config));
@@ -41,6 +42,53 @@ describe('scene codec', () => {
     expect(decoded.theme).toBe('neon-blue');
     expect(decoded.motion).toBe('none');
     expect(decoded.revealDelay).toBe(2);
+  });
+  it('clamps a default weight when a crafted fragment swaps only the font', () => {
+    // bebas-neue ships only 400; omitting the weight key must not leave the default 700.
+    const d = decodeSceneConfig('v=1&hf=bebas-neue');
+    expect(d.headlineFont).toBe('bebas-neue');
+    expect(d.headlineWeight).toBe(400);
+    for (const [prefix, key] of [['sf', 'subtitleFont'], ['nf', 'numberFont'], ['rf', 'revealFont']] as const) {
+      const swapped = decodeSceneConfig(`v=1&${prefix}=bebas-neue`);
+      expect(swapped[key as 'subtitleFont']).toBe('bebas-neue');
+      expect(swapped[`${key.replace('Font', 'Weight')}` as 'subtitleWeight']).toBe(400);
+    }
+    // Explicit weights are clamped too, and encoding re-emits the clamped value.
+    const d2 = decodeSceneConfig('v=1&hf=bebas-neue&hw=700');
+    expect(d2.headlineWeight).toBe(400);
+    expect(encodeSceneConfig(d2)).toContain('hf=bebas-neue&hw=400');
+  });
+  it('rejects out-of-range numerics instead of silently clamping', () => {
+    expect(decodeSceneConfig('v=1&hs=999')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&hs=9')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&rd=4')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&rd=-1')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&hw=350')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&hw=800')).toEqual(DEFAULT_SCENE_CONFIG);
+  });
+  it('survives fuzzed fragments and rejects injection payloads', () => {
+    const payloads = ['', '#', 'v', '=1', 'v=1&', '%', '%zz', 'v=1&h=%zz', 'v=1&h=<script>alert(1)</script>',
+      'v=1&h=<img src=x onerror=alert(1)>', 'v=1&th=__proto__', 'v=1&th=constructor', 'v=1&h=javascript:alert(1)',
+      'v=1&hc=;background:url(x)', 'v=1&ct=</textarea>', 'v=1&v=1&v=1', 'v=1&=x', 'v=1&&&'];
+    for (const payload of payloads) {
+      const decoded = decodeSceneConfig(payload);
+      // Always a fully valid canonical config, never a crash.
+      expect(decoded.version).toBe(1);
+      expect(decoded.headline).toMatch(/^[A-Za-z0-9 !?.,:'"&\-+()/·—–]*$/);
+      expect(() => encodeSceneConfig(decoded)).not.toThrow();
+    }
+    // Deterministic pseudo-random fuzz: keys/values must never break the invariants.
+    let seed = 42; const rand = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789=&%-_#<>"\'';
+    for (let i = 0; i < 300; i++) {
+      const length = 1 + Math.floor(rand() * 60);
+      let fragment = '';
+      for (let j = 0; j < length; j++) fragment += alphabet[Math.floor(rand() * alphabet.length)];
+      const decoded = decodeSceneConfig(fragment);
+      expect(decoded.version).toBe(1);
+      expect(decoded.headlineSize).toBeGreaterThanOrEqual(10); expect(decoded.headlineSize).toBeLessThanOrEqual(240);
+      expect(colorLike(decoded.headlineColor)).toBe(true);
+    }
   });
   it('builds the scene runtime URL', () => {
     const url = sceneUrl(base(), 'https://obs-clock-widget.pages.dev/');

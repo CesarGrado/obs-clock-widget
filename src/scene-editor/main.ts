@@ -9,7 +9,7 @@ import { FONTS, FONT_CATEGORIES, clampWeight, fontById } from '../config/fonts';
 import { cloneSceneConfig } from '../config/clone';
 import { renderScene } from '../scene/renderer';
 import { isAbsoluteIsoTarget } from '../time/countdown';
-import { resolveTimezoneOffsetMs } from '../editor/tz';
+import { wallTimeToInstant, instantToWallFields, timezoneLabel } from '../editor/tz';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -75,7 +75,11 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const schedule = element('div', { class: 'schedule-row' });
     labeled(schedule, 'Date', element('input', { id: 'countdown-date', type: 'date' }));
     labeled(schedule, 'Time', element('input', { id: 'countdown-time', type: 'time' }));
-    schedule.append(element('span', { id: 'countdown-timezone', class: 'hint' }));
+    const tz = element('span', { id: 'countdown-timezone', class: 'hint' }); tz.textContent = timezoneLabel();
+    schedule.append(tz);
+    const delay = element('select', { id: 'reveal-delay', 'aria-label': 'Delay before the zero message appears' });
+    for (const minutes of [0, 1, 2, 3]) delay.append(option(String(minutes), minutes === 0 ? 'Right at zero' : `${minutes} min after zero`));
+    labeled(countdown, 'Show zero message', delay);
     countdown.append(quick, schedule, element('p', { id: 'countdown-error', class: 'error', role: 'alert' }), element('p', { id: 'resolved-target', 'aria-live': 'polite', class: 'hint' }));
     app.append(countdown);
     const actions = element('fieldset'); actions.append(element('legend', {}, 'Preview & OBS'));
@@ -105,8 +109,11 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   const syncCountdownInputs = () => {
     const end = new Date(config.countdownTarget); if (Number.isNaN(end.getTime())) return;
-    byId<HTMLInputElement>('countdown-date').value = end.toISOString().slice(0, 10);
-    byId<HTMLInputElement>('countdown-time').value = end.toISOString().slice(11, 16);
+    // Display the target in the device timezone (the one scheduling interprets inputs in).
+    const { date, time } = instantToWallFields(end);
+    byId<HTMLInputElement>('countdown-date').value = date;
+    byId<HTMLInputElement>('countdown-time').value = time;
+    byId<HTMLSelectElement>('reveal-delay').value = String(config.revealDelay);
   };
   const refresh = () => {
     scene?.stop();
@@ -159,9 +166,9 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
     if (!dateValue) return;
     const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
-    const candidate = new Date(Date.UTC(year!, (month ?? 1) - 1, day!, hour ?? 0, minute ?? 0));
-    const offset = resolveTimezoneOffsetMs(candidate, Intl.DateTimeFormat().resolvedOptions().timeZone);
-    const absolute = new Date(candidate.getTime() - offset);
+    // DST-safe wall→instant conversion (candidate enumeration + round-trip, first occurrence, gap rejection).
+    const absolute = wallTimeToInstant({ year: year!, month: month ?? 1, day: day!, hour: hour ?? 0, minute: minute ?? 0 });
+    if (!absolute) { byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.'; return; }
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
     if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time.'; return; }
     if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away.'; return; }
@@ -169,13 +176,17 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   byId('countdown-date').addEventListener('change', scheduleFromInputs);
   byId('countdown-time').addEventListener('change', scheduleFromInputs);
+  byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
   byId('preview-zero').addEventListener('change', refresh);
   const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(sceneUrl(config), 'Scene URL copied.'));
   byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'));
 
   const previewPanel = element('div', { class: 'preview-panel', id: 'preview-panel' });
-  previewPanel.append(element('h2', {}, 'Scene preview'), element('div', { id: 'preview-root', class: 'scene-preview' }));
+  previewPanel.append(element('h2', {}, 'Scene preview'));
+  const frame = element('div', { class: 'scene-frame' });
+  frame.append(element('div', { id: 'preview-root', class: 'scene-preview' }));
+  previewPanel.append(frame);
   const layout = element('div', { class: 'editor-layout' });
   const controls = element('section', { class: 'controls', 'aria-label': 'Scene settings' });
   while (app.firstChild) controls.append(app.firstChild);

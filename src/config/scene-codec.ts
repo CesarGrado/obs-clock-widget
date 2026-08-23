@@ -33,7 +33,7 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     if (p.has('h')) c.headline = p.get('h')!;
     if (p.has('sub')) c.subtitle = p.get('sub')!;
     if (p.has('ct')) c.countdownTarget = p.get('ct')!;
-    const numeric = (key: string, fallback: number, min: number, max: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!new RegExp(`^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$`).test(rawValue)) throw new Error('Invalid number'); const n = Number(rawValue); return Math.min(max, Math.max(min, n)); };
+    const numeric = (key: string, fallback: number, min: number, max: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!new RegExp(`^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$`).test(rawValue)) throw new Error('Invalid number'); const n = Number(rawValue); if (n < min || n > max) throw new Error("Out of range"); return n; };
     for (const k of ['headline', 'subtitle', 'number', 'reveal'] as const) {
       const pfx = k[0];
       if (p.has(`${pfx}f`)) (c as Record<string, unknown>)[`${k}Font`] = p.get(`${pfx}f`)!;

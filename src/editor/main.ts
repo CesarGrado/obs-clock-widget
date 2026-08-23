@@ -12,7 +12,7 @@ import { renderClock } from '../clock/renderer';
 import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
-import { resolveTimezoneOffsetMs } from './tz';
+import { wallTimeToInstant } from './tz';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -204,24 +204,14 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
     if (!dateValue) return;
     const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
-    const candidate = new Date(Date.UTC(year!, (month ?? 1) - 1, day!, hour ?? 0, minute ?? 0));
     const timeZone = config.timezone === 'local' ? undefined : config.timezone;
-    // Enumerate plausible offsets around the wall time, keep instants that round-trip to the
-    // exact selected wall time, and pick the EARLIEST — the explicit "first occurrence"
-    // policy for DST fall-back overlaps. Zero candidates means a DST gap (rejected).
-    const offsetFor = (instant: Date) => timeZone ? resolveTimezoneOffsetMs(instant, timeZone) : -instant.getTimezoneOffset() * 60_000;
-    const backFmt = new Intl.DateTimeFormat('en-US', { ...(timeZone ? { timeZone } : {}), hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    const roundTrips = (instant: Date) => {
-      const parts = backFmt.formatToParts(instant); const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
-      return get('year') === year && get('month') === month && get('day') === day && get('hour') % 24 === hour && get('minute') === minute;
-    };
-    const probes = [candidate.getTime() - 15 * 3_600_000, candidate.getTime(), candidate.getTime() + 15 * 3_600_000].map((ms) => offsetFor(new Date(ms)));
-    const instants = [...new Set(probes)].map((offset) => new Date(candidate.getTime() - offset)).filter(roundTrips);
-    if (instants.length === 0) {
+    // DST-safe conversion: enumerate candidates, keep exact round-trips, pick the earliest
+    // ("first occurrence"). Null means the wall time is a DST gap and is rejected.
+    const absolute = wallTimeToInstant({ year: year!, month: month ?? 1, day: day!, hour: hour ?? 0, minute: minute ?? 0 }, timeZone);
+    if (!absolute) {
       byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.';
       return;
     }
-    const absolute = new Date(Math.min(...instants.map((instant) => instant.getTime())));
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
     if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time for your countdown.'; return; }
     if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
