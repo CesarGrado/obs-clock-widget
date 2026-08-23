@@ -38,6 +38,8 @@ export default defineConfig({
         home: resolve(__dirname, 'index.html'),
         editor: resolve(__dirname, 'editor/index.html'),
         clock: resolve(__dirname, 'v1/clock/index.html'),
+        scene: resolve(__dirname, 'v1/scene/index.html'),
+        sceneEditor: resolve(__dirname, 'scene-editor/index.html'),
       },
     },
   },

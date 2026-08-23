@@ -1,0 +1,20 @@
+.scene-root{position:fixed;inset:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.scene-root[data-theme=dark-gradient]{background:radial-gradient(120% 90% at 50% 10%,#1b2340 0%,#0c101f 55%,#070a14 100%)}
+.scene-root[data-theme=puzzlr-purple]{background:radial-gradient(120% 90% at 50% 0%,#3a2a6e 0%,#241a4a 45%,#120d26 100%)}
+.scene-root[data-theme=neon-blue]{background:radial-gradient(130% 100% at 50% 15%,#0b2e4f 0%,#071a30 55%,#040d1a 100%)}
+.scene-root[data-theme=sunset]{background:linear-gradient(180deg,#3d1f4d 0%,#7a2f4f 45%,#c46a3f 100%)}
+.scene-root[data-theme=minimal-black]{background:#000}
+.scene-content{display:flex;flex-direction:column;align-items:center;gap:1.5rem;padding:2rem 4rem;text-align:center;max-width:88vw}
+.scene-root[data-align=left] .scene-content{align-items:flex-start;text-align:left}
+.scene-headline,.scene-subtitle,.scene-number,.scene-reveal{margin:0;white-space:pre-wrap;word-break:break-word}
+.scene-countdown{display:flex;flex-direction:column;align-items:inherit}
+.scene-stage{position:relative;width:100%;display:flex;flex-direction:column;align-items:inherit;gap:inherit}
+.scene-panel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:inherit;justify-content:center;gap:inherit;transition:opacity .8s ease;opacity:1}
+.scene-panel.scene-hidden{opacity:0;pointer-events:none}
+.scene-reveal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:opacity .8s ease;opacity:0;pointer-events:none}
+.scene-reveal.scene-shown{opacity:1;pointer-events:auto}
+@media (prefers-reduced-motion: reduce){.scene-panel,.scene-reveal{transition:none}}
+.scene-root[data-motion=subtle] .scene-content{animation:scene-drift 24s ease-in-out infinite alternate}
+@keyframes scene-drift{from{transform:translateY(-0.6%) scale(1)}to{transform:translateY(0.6%) scale(1.015)}}
+@media (prefers-reduced-motion: reduce){.scene-root[data-motion=subtle] .scene-content{animation:none}}
+.scene-error{color:#ff8080;font-family:ui-monospace,monospace;padding:2rem}

@@ -12,6 +12,7 @@ import { renderClock } from '../clock/renderer';
 import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
+import { resolveTimezoneOffsetMs } from './tz';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -22,13 +23,6 @@ const fontSelect = (id: string) => { const node = element('select', { id }); FON
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
 const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
 
-const resolveTimezoneOffsetMs = (instant: Date, timeZone: string): number => {
-  // Offset (ms to add to a local wall-clock time in `timeZone` to get UTC) via the z/ZZ hour-minute pattern.
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(instant);
-  const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
-  const asUtc = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour') % 24, get('minute'), get('second'));
-  return asUtc - instant.getTime();
-};
 
 const FORMAT_PRESETS = [
   ['', 'Custom'],
@@ -54,7 +48,7 @@ function buildLine(parent: HTMLElement, n: number) {
 }
 
 function buildEditor(app: HTMLElement) {
-  const header = element('header'); header.append(element('p', { class: 'eyebrow' }, 'OBS BROWSER SOURCE'), element('h1', {}, 'Clock Overlay Studio'), element('p', {}, 'Design a transparent two-line clock, then copy its permanent URL into OBS.'));
+  const header = element('header'); header.append(element('p', { class: 'eyebrow' }, 'OBS BROWSER SOURCE'), element('h1', {}, 'Clock Overlay Studio'), element('p', {}, 'Design a transparent two-line clock, then copy its permanent URL into OBS.'), element('p', { class: 'scene-link' }, '')); (header.lastChild as HTMLElement).append(element('a', { href: '/scene-editor/' }, 'Need a full starting-soon scene? Build one →'));
   const layout = element('div', { class: 'editor-layout' }); const panel = element('section', { class: 'controls', 'aria-label': 'Clock settings' });
   const global = element('fieldset'); global.append(element('legend', {}, 'Preset, time & appearance'));
   const preset = select('preset', ['Custom', ...Object.keys(PRESETS)]); labeled(global, 'Preset', preset);

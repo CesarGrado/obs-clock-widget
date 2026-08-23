@@ -1,0 +1,28 @@
+.scene-preview{position:relative;aspect-ratio:16/9;width:100%;overflow:hidden;border-radius:10px;border:1px solid #292e42}
+.scene-preview.scene-root{position:absolute;inset:0}
+.scene-preview .scene-content{max-width:100%;padding:2% 4%}
+.theme-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.6rem}
+.theme-card{display:block;border:1px solid #292e42;border-radius:10px;padding:1.6rem .8rem .6rem;text-align:center;cursor:pointer;color:#dbe1f5;background:#0d1120;position:relative;min-width:0}
+.theme-card[data-theme=dark-gradient]{background:radial-gradient(120% 90% at 50% 10%,#1b2340 0%,#0c101f 55%,#070a14 100%)}
+.theme-card[data-theme=puzzlr-purple]{background:radial-gradient(120% 90% at 50% 0%,#3a2a6e 0%,#241a4a 45%,#120d26 100%)}
+.theme-card[data-theme=neon-blue]{background:radial-gradient(130% 100% at 50% 15%,#0b2e4f 0%,#071a30 55%,#040d1a 100%)}
+.theme-card[data-theme=sunset]{background:linear-gradient(180deg,#3d1f4d 0%,#7a2f4f 45%,#c46a3f 100%)}
+.theme-card[data-theme=minimal-black]{background:#000}
+.theme-card.active{border-color:#53e0c1;box-shadow:0 0 0 1px #53e0c1}
+.theme-radio{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0)}
+.motion-choice{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem}
+.motion-card{display:inline-flex;border:1px solid #292e42;border-radius:8px;padding:.4rem .8rem;cursor:pointer;color:#dbe1f5}
+.motion-card.active{border-color:#53e0c1}
+.motion-card input{margin-right:.4rem}
+.type-row{display:grid;grid-template-columns:2fr 5rem 6rem 4rem;gap:.5rem;align-items:end;padding:.5rem 0;border-bottom:1px solid #1c2135}
+.type-row:last-child{border-bottom:none}
+.quick-buttons{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
+.quick-button{padding:.5rem .9rem;border-radius:8px;border:1px solid #292e42;background:#0d1120;color:#dbe1f5;cursor:pointer;font-weight:600}
+.quick-button:hover{border-color:#53e0c1}
+.schedule-row{display:grid;grid-template-columns:1fr 1fr auto;gap:.6rem;align-items:end;min-width:0}
+.schedule-row input{min-width:0}
+.app-header{max-width:1500px;margin:auto;padding:clamp(1rem,3vw,2.5rem)}
+.app-header a{color:#53e0c1}
+.error{color:#ff8080;min-height:1.2em;margin:.3rem 0}
+.hint{color:#8b93ad;min-height:1.2em}
+@media(max-width:899px){.type-row{grid-template-columns:1fr 1fr}.schedule-row{grid-template-columns:1fr}}
