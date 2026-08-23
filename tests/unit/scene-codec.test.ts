@@ -66,6 +66,14 @@ describe('scene codec', () => {
     expect(decodeSceneConfig('v=1&hw=350')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&hw=800')).toEqual(DEFAULT_SCENE_CONFIG);
   });
+  it('enforces a strict canonical fragment and rejects noncanonical separators', () => {
+    for (const bad of ['v=1&&h=EMPTYPAIR', 'v=1&h=VALUE&', 'v=1&', '&v=1', 'v=1&h=', 'v=1&h=hi&', 'v=1&=x', 'v=1&h=hi&&rd=2', 'v=1;h=x']) {
+      expect(decodeSceneConfig(bad)).toEqual(DEFAULT_SCENE_CONFIG);
+    }
+    // A clean canonical fragment still decodes.
+    const ok = decodeSceneConfig('v=1&h=GAME%20NIGHT&th=neon-blue&mo=none&rd=2');
+    expect(ok.headline).toBe('GAME NIGHT');
+  });
   it('survives fuzzed fragments and rejects injection payloads', () => {
     const payloads = ['', '#', 'v', '=1', 'v=1&', '%', '%zz', 'v=1&h=%zz', 'v=1&h=<script>alert(1)</script>',
       'v=1&h=<img src=x onerror=alert(1)>', 'v=1&th=__proto__', 'v=1&th=constructor', 'v=1&h=javascript:alert(1)',

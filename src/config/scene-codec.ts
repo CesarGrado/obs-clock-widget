@@ -26,6 +26,9 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     const raw = fragment.replace(/^#/, '');
     if (new TextEncoder().encode(raw).length > 2048) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     decodeURIComponent(raw.replace(/\+/g, '%20'));
+    // Strict canonical form: only single '&' between "key=value" pairs, no empty keys/values,
+    // no leading/trailing/double separators. URLSearchParams would silently drop these, so reject.
+    if (!/^(?:[a-z0-9]+=[A-Za-z0-9%\-._~:/?=+$,'!*()]+)(?:&[a-z0-9]+=[A-Za-z0-9%\-._~:/?=+$,'!*()]+)*$/.test(raw)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     const p = new URLSearchParams(raw); const seen = new Set<string>();
     for (const [key] of p) { if (!allowed.has(key) || seen.has(key) || ['__proto__', 'constructor', 'prototype'].includes(key)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG); seen.add(key); }
     if (p.get('v') !== '1') return cloneSceneConfig(DEFAULT_SCENE_CONFIG);

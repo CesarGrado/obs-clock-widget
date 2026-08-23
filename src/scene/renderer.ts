@@ -13,7 +13,7 @@ const styled = (node: HTMLElement, font: string, size: number, weight: number, c
 
 export function renderScene(root: HTMLElement, config: SceneConfig, now: () => Date = () => new Date()): SceneControls {
   root.replaceChildren();
-  if (!root.classList.contains("scene-root")) root.classList.add("scene-root");
+  if (!root.classList.contains('scene-root')) root.classList.add('scene-root');
   root.setAttribute('data-theme', config.theme);
   root.setAttribute('data-motion', config.motion);
   root.setAttribute('data-align', config.align);
@@ -21,6 +21,17 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
 
   const content = document.createElement('div'); content.className = 'scene-content';
   const stage = document.createElement('div'); stage.className = 'scene-stage';
+  const measure = document.createElement('div'); measure.className = 'scene-measure';
+  stage.append(measure);
+  const applyScale = () => {
+    const w = measure.clientWidth, h = measure.clientHeight;
+    if (w > 0 && h > 0) { root.style.setProperty('--vw', `${w / 100}px`); root.style.setProperty('--vh', `${h / 100}px`); }
+  };
+  applyScale();
+  const ro = 'ResizeObserver' in window ? new ResizeObserver(applyScale) : null;
+  ro?.observe(measure);
+  const stopObserve = () => ro?.disconnect();
+
   const panel = document.createElement('div'); panel.className = 'scene-panel';
   const headline = document.createElement('h1'); headline.className = 'scene-headline'; headline.textContent = config.headline;
   styled(headline, config.headlineFont, config.headlineSize, config.headlineWeight, config.headlineColor);
@@ -53,6 +64,6 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
   };
   const showReveal = () => { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); number.textContent = '00:00:00'; };
   const hideReveal = () => { revealed = false; panel.classList.remove('scene-hidden'); reveal.classList.remove('scene-shown'); update(); };
-  const stop = startClock(update, true);
-  return { stop, update, showReveal, hideReveal };
+  const stop = startClock(() => { applyScale(); update(); }, true);
+  return { stop: () => { stop(); stopObserve(); }, update, showReveal, hideReveal };
 }

@@ -26,23 +26,49 @@ test('scene builder produces a working full-screen scene URL', async ({ page, co
   expect(errors).toEqual([]);
 });
 
-test('scene runtime geometry is full-screen and visible at 1080p, 4K, and 640x360', async ({ page }) => {
-  const soon = new Date(Date.now() + 60_000).toISOString().replace('.000Z', 'Z');
-  await page.goto(`/v1/scene/#v=1&ct=${encodeURIComponent(soon)}`);
-  // Freeze the subtle drift at BOTH endpoints so the assertion is deterministic, not phase-dependent.
+test('scene runtime geometry is full-screen and visible at 320x180, 640x360, 1080p, and 4K', async ({ page }) => {
+  // Use a maximum-valid 48-char headline + 64-char subtitle + long reveal to stress layout.
+  const h = 'A'.repeat(48), sub = 'B'.repeat(64), rv = 'C'.repeat(32);
+  const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&rv=${encodeURIComponent(rv)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace('.000Z', 'Z'))}`;
+  await page.goto(`/v1/scene/${frag}`);
+  const boxesOk = async (w: number, hgt: number) => new Promise<void>(async (resolve) => {
+    await page.setViewportSize({ width: w, height: hgt });
+    // Wait for the ResizeObserver-driven --vw/--vh to apply and reflow before measuring.
+    await page.waitForFunction(() => {
+      const root = document.querySelector('.scene-root') as HTMLElement;
+      return root && getComputedStyle(root).getPropertyValue('--vw').trim() !== '';
+    });
+    await page.waitForTimeout(60);
+    const root = await page.locator('.scene-root').boundingBox();
+    const headline = await page.locator('.scene-headline').boundingBox();
+    const number = await page.locator('.scene-number').boundingBox();
+    const subtitle = await page.locator('.scene-subtitle').boundingBox();
+    expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(hgt);
+    for (const box of [headline!, number!, subtitle!]) {
+      expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(hgt);
+    }
+    resolve();
+  });
+  // Freeze both subtle-motion endpoints so the check is deterministic.
   for (const delay of ['0s', '-12s']) {
     await page.addStyleTag({ content: `.scene-content{animation-play-state:paused !important;animation-delay:${delay} !important}` });
-    for (const [w, h] of [[1920, 1080], [3840, 2160], [640, 360]] as const) {
-      await page.setViewportSize({ width: w, height: h });
-      const root = await page.locator('.scene-root').boundingBox();
-      const headline = await page.locator('.scene-headline').boundingBox();
-      const number = await page.locator('.scene-number').boundingBox();
-      expect(root).toBeTruthy(); expect(headline).toBeTruthy(); expect(number).toBeTruthy();
-      expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(h);
-      // Visible inside the viewport at every animation phase.
-      for (const box of [headline!, number!]) {
-        expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(h);
-      }
+    for (const [w, hh] of [[320, 180], [640, 360], [1920, 1080], [3840, 2160]] as const) await boxesOk(w, hh);
+  }
+});
+
+test('editor preview stays contained inside its 16:9 frame at narrow and wide widths, both motion endpoints', async ({ page }) => {
+  for (const width of [640, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/scene-editor/');
+    await page.locator('label.theme-card[for="theme-puzzlr-purple"]').click();
+    for (const delay of ['0s', '-12s']) {
+      await page.addStyleTag({ content: `#preview-root .scene-content{animation-play-state:paused !important;animation-delay:${delay} !important}` });
+      const contained = await page.evaluate(() => {
+        const frame = document.querySelector('.scene-frame')!.getBoundingClientRect();
+        const content = document.querySelector('#preview-root .scene-content')!.getBoundingClientRect();
+        return content.left >= frame.left - 1 && content.right <= frame.right + 1 && content.top >= frame.top - 1 && content.bottom <= frame.bottom + 1;
+      });
+      expect(contained).toBe(true);
     }
   }
 });
