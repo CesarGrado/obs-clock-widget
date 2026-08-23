@@ -31,23 +31,25 @@ test('scene runtime geometry is full-screen and visible at 320x180, 640x360, 108
   const h = 'A'.repeat(48), sub = 'B'.repeat(64), rv = 'C'.repeat(32);
   const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&rv=${encodeURIComponent(rv)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace('.000Z', 'Z'))}`;
   await page.goto(`/v1/scene/${frag}`);
-  const boxesOk = async (w: number, hgt: number) => new Promise<void>(async (resolve) => {
-    await page.setViewportSize({ width: w, height: hgt });
-    // Wait for the ResizeObserver-driven --vw/--vh to apply and reflow before measuring.
-    await page.waitForFunction(() => {
-      const root = document.querySelector('.scene-root') as HTMLElement;
-      return root && getComputedStyle(root).getPropertyValue('--vw').trim() !== '';
-    });
-    await page.waitForTimeout(60);
-    const root = await page.locator('.scene-root').boundingBox();
-    const headline = await page.locator('.scene-headline').boundingBox();
-    const number = await page.locator('.scene-number').boundingBox();
-    const subtitle = await page.locator('.scene-subtitle').boundingBox();
-    expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(hgt);
-    for (const box of [headline!, number!, subtitle!]) {
-      expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(hgt);
-    }
-    resolve();
+  const boxesOk = (w: number, hgt: number) => new Promise<void>((resolve, reject) => {
+    (async () => {
+      await page.setViewportSize({ width: w, height: hgt });
+      // Wait for the ResizeObserver-driven --vw/--vh to apply and reflow before measuring.
+      await page.waitForFunction(() => {
+        const root = document.querySelector('.scene-root') as HTMLElement;
+        return root && getComputedStyle(root).getPropertyValue('--vw').trim() !== '';
+      });
+      await page.waitForTimeout(60);
+      const root = await page.locator('.scene-root').boundingBox();
+      const headline = await page.locator('.scene-headline').boundingBox();
+      const number = await page.locator('.scene-number').boundingBox();
+      const subtitle = await page.locator('.scene-subtitle').boundingBox();
+      expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(hgt);
+      for (const box of [headline!, number!, subtitle!]) {
+        expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(hgt);
+      }
+      resolve();
+    })().catch(reject);
   });
   // Freeze both subtle-motion endpoints so the check is deterministic.
   for (const delay of ['0s', '-12s']) {
