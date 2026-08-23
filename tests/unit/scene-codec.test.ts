@@ -37,7 +37,7 @@ describe('scene codec', () => {
     expect(decodeSceneConfig('v=1&hs=12e3')).toEqual(DEFAULT_SCENE_CONFIG);
   });
   it('decodes overrides into a valid config', () => {
-    const decoded = decodeSceneConfig('v=1&h=GAME%20NIGHT&th=neon-blue&mo=none&rd=2');
+    const decoded = decodeSceneConfig('v=1&h=GAME+NIGHT&th=neon-blue&mo=none&rd=2');
     expect(decoded.headline).toBe('GAME NIGHT');
     expect(decoded.theme).toBe('neon-blue');
     expect(decoded.motion).toBe('none');
@@ -70,9 +70,24 @@ describe('scene codec', () => {
     for (const bad of ['v=1&&h=EMPTYPAIR', 'v=1&h=VALUE&', 'v=1&', '&v=1', 'v=1&h=', 'v=1&h=hi&', 'v=1&=x', 'v=1&h=hi&&rd=2', 'v=1;h=x']) {
       expect(decodeSceneConfig(bad)).toEqual(DEFAULT_SCENE_CONFIG);
     }
+    // Noncanonical encodings that URLSearchParams would silently normalize must be rejected.
+    // '%41' (should be 'A'), '%20' (encoder emits '+'), and a raw ':' in ct (encoder emits '%3A').
+    for (const bad of ['v=1&h=%41', 'v=1&h=GAME%20NIGHT', 'v=1&ct=2099-12-31T23:59:00Z']) {
+      expect(decodeSceneConfig(bad)).toEqual(DEFAULT_SCENE_CONFIG);
+    }
+    // Canonical encodings are accepted: '+' for spaces and '%2F'/'%3A' case-insensitive.
+    expect(decodeSceneConfig('v=1&h=A+B').headline).toBe('A B');
+    expect(decodeSceneConfig('v=1&h=GAME%2fNIGHT').headline).toBe('GAME/NIGHT');
     // A clean canonical fragment still decodes.
-    const ok = decodeSceneConfig('v=1&h=GAME%20NIGHT&th=neon-blue&mo=none&rd=2');
+    const ok = decodeSceneConfig('v=1&h=GAME+NIGHT&th=neon-blue&mo=none&rd=2');
     expect(ok.headline).toBe('GAME NIGHT');
+  });
+  it('round-trips canonical fragments byte-for-byte (decode then re-encode equals input)', () => {
+    // Uses a non-default ct so it is not elided as a default during re-encode. Key order follows
+    // the encoder's own emission order (h, sub, ct, ...), which is the canonical form.
+    const canonical = 'v=1&h=GAME+NIGHT&sub=see+you+soon&ct=2026-12-31T23%3A59%3A00Z&th=neon-blue&mo=none&rv=GO&rd=2';
+    const decoded = decodeSceneConfig(canonical);
+    expect(encodeSceneConfig(decoded)).toBe(canonical);
   });
   it('survives fuzzed fragments and rejects injection payloads', () => {
     const payloads = ['', '#', 'v', '=1', 'v=1&', '%', '%zz', 'v=1&h=%zz', 'v=1&h=<script>alert(1)</script>',

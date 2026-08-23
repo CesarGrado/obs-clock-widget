@@ -49,6 +49,22 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     if (p.has('rv')) c.reveal = p.get('rv')!;
     if (p.has('rd')) c.revealDelay = numeric('rd', c.revealDelay, 0, 3) as SceneConfig['revealDelay'];
     if (p.has('a')) c.align = p.get('a') as SceneConfig['align'];
+    // Canonical-contract check: every present value must already be in the encoder's own
+    // percent-encoding. The encoder emits '+' for spaces and uppercase-hex escapes (%2F, %3A,
+    // ...) via URLSearchParams, so inputs using '%20', '%41', or a raw ':' (which URLSearchParams
+    // would silently normalize on the way out) are rejected. Hex case is normalized so '%2f' and
+    // '%2F' are treated as equal. Partial fragments are allowed; only present keys are checked.
+    const normHex = (s: string) => s.replace(/%([0-9a-fA-F]{2})/g, (_m, h) => `%${h.toUpperCase()}`);
+    for (const pair of raw.split('&')) {
+      const eq = pair.indexOf('=');
+      const key = pair.slice(0, eq);
+      const rawValue = pair.slice(eq + 1);
+      const decodedValue = decodeURIComponent(rawValue.replace(/\+/g, ' '));
+      // Re-encode the decoded value through URLSearchParams (the encoder's own serializer) and
+      // read back the canonical encoded form via toString(), not get() (which returns decoded).
+      const canonicalValue = new URLSearchParams({ [key]: decodedValue }).toString().slice(key.length + 1);
+      if (normHex(canonicalValue) !== normHex(rawValue)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+    }
     return normalizeSceneConfig(c);
   } catch { return cloneSceneConfig(DEFAULT_SCENE_CONFIG); }
 }
