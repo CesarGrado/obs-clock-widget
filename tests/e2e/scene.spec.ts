@@ -58,19 +58,33 @@ test('scene runtime geometry is full-screen and visible at 320x180, 640x360, 108
   }
 });
 
-test('editor preview stays contained inside its 16:9 frame at narrow and wide widths, both motion endpoints', async ({ page }) => {
-  for (const width of [640, 1280]) {
+test('editor preview with maximum-valid text stays contained inside its 16:9 frame at narrow and wide widths, both motion endpoints', async ({ page }) => {
+  for (const width of [320, 640, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/scene-editor/');
     await page.locator('label.theme-card[for="theme-puzzlr-purple"]').click();
+    // Maximum-valid content: 48-char headline, 64-char subtitle, 32-char reveal.
+    await page.fill('#headline', 'A'.repeat(48));
+    await page.fill('#subtitle', 'B'.repeat(64));
+    await page.fill('#reveal', 'C'.repeat(32));
+    // Wait for ResizeObserver element-box scaling to apply.
+    await page.waitForFunction(() => {
+      const root = document.querySelector('#preview-root') as HTMLElement;
+      return root && getComputedStyle(root).getPropertyValue('--vw').trim() !== '';
+    });
+    await page.waitForTimeout(60);
     for (const delay of ['0s', '-12s']) {
       await page.addStyleTag({ content: `#preview-root .scene-content{animation-play-state:paused !important;animation-delay:${delay} !important}` });
       const contained = await page.evaluate(() => {
         const frame = document.querySelector('.scene-frame')!.getBoundingClientRect();
-        const content = document.querySelector('#preview-root .scene-content')!.getBoundingClientRect();
-        return content.left >= frame.left - 1 && content.right <= frame.right + 1 && content.top >= frame.top - 1 && content.bottom <= frame.bottom + 1;
+        const elements = ['.scene-panel', '.scene-headline', '.scene-subtitle', '.scene-number', '.scene-reveal']
+          .map((sel) => document.querySelector(`#preview-root ${sel}`)?.getBoundingClientRect())
+          .filter((b): b is DOMRect => !!b);
+        const allInside = elements.every((b) => b.left >= frame.left - 1 && b.right <= frame.right + 1 && b.top >= frame.top - 1 && b.bottom <= frame.bottom + 1);
+        return { count: elements.length, allInside };
       });
-      expect(contained).toBe(true);
+      expect(contained.count).toBe(5);
+      expect(contained.allInside).toBe(true);
     }
   }
 });

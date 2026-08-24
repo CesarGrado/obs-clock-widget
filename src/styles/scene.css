@@ -4,16 +4,18 @@
 .scene-root[data-theme=neon-blue]{background:radial-gradient(130% 100% at 50% 15%,#0b2e4f 0%,#071a30 55%,#040d1a 100%)}
 .scene-root[data-theme=sunset]{background:linear-gradient(180deg,#3d1f4d 0%,#7a2f4f 45%,#c46a3f 100%)}
 .scene-root[data-theme=minimal-black]{background:#000}
+/* Padding uses the scene's own box units (--vw/--vh) so the safe region tracks the actual scene
+   area, whether that is the full viewport (runtime) or the 16:9 preview frame (editor). */
 .scene-content{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1.5rem;padding:calc(4 * var(--vh, 1vh)) calc(4 * var(--vw, 1vw));text-align:center;width:100%;height:100%;box-sizing:border-box}
 .scene-root[data-align=left] .scene-content{align-items:flex-start;text-align:left}
 .scene-headline,.scene-subtitle,.scene-number,.scene-reveal{margin:0;white-space:pre-wrap;word-break:break-word;line-height:1.05}
-/* Scale declared px sizes to the element's own box (--vw/--vh), capped by BOTH width and height so
-   valid multiline text stays composed on any resolution incl. 320x180 preview and 4K. min(): Chrome 79+. */
-.scene-headline{font-size:min(9vw,9vh,var(--size,96px))}
-.scene-subtitle{font-size:min(4vw,4vh,var(--size,36px))}
-.scene-number{font-size:min(18vw,18vh,var(--size,220px))}
-.scene-reveal{font-size:min(10vw,10vh,var(--size,120px))}
-.scene-measure{position:absolute;inset:0;pointer-events:none;visibility:hidden}
+/* Scale declared px sizes to the scene's own box (--vw/--vh each = 1% of the scene width/height),
+   capped by BOTH width and height so valid multiline text stays composed on any resolution incl.
+   320x180 preview and 4K. min()+calc(): Chrome 79+. */
+.scene-headline{font-size:min(calc(9 * var(--vw, 1vw)), calc(9 * var(--vh, 1vh)), var(--size, 96px))}
+.scene-subtitle{font-size:min(calc(4 * var(--vw, 1vw)), calc(4 * var(--vh, 1vh)), var(--size, 36px))}
+.scene-number{font-size:min(calc(18 * var(--vw, 1vw)), calc(18 * var(--vh, 1vh)), var(--size, 220px))}
+.scene-reveal{font-size:min(calc(10 * var(--vw, 1vw)), calc(10 * var(--vh, 1vh)), var(--size, 120px))}
 .scene-stage{position:relative;width:100%;display:flex;flex-direction:column;align-items:inherit}
 .scene-panel{display:flex;flex-direction:column;align-items:inherit;gap:inherit;transition:opacity .8s ease;opacity:1}
 .scene-panel.scene-hidden{opacity:0;visibility:hidden}
@@ -23,6 +25,5 @@
 .scene-root[data-motion=subtle] .scene-content{animation:scene-drift 24s ease-in-out infinite alternate}
 @keyframes scene-drift{from{transform:translateY(-0.4%) scale(1.004)}to{transform:translateY(0.4%) scale(1.008)}}
 /* Keep animated content inside the safe region at every phase (max ~0.4% shift + 0.8% scale). */
-.scene-content{padding-top:4vh;padding-bottom:4vh}
 @media (prefers-reduced-motion: reduce){.scene-root[data-motion=subtle] .scene-content{animation:none}}
 .scene-error{color:#ff8080;font-family:ui-monospace,monospace;padding:2rem}

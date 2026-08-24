@@ -5,6 +5,12 @@ import { countdownDisplay } from '../time/countdown';
 
 export type SceneControls = { stop: () => void; update: () => void; showReveal: () => void; hideReveal: () => void };
 
+// Far-future sentinel used as the "no time set yet" template default. The runtime treats it (and
+// anything more than 99 days out) as unscheduled: the countdown number is hidden so a freshly
+// opened scene never shows a misleading "99d+" timer.
+const UNSCHEDULED_TARGET = '2099-12-31T23:59:00Z';
+const isUnscheduled = (target: string, now: Date) => target === UNSCHEDULED_TARGET || Date.parse(target) - now.getTime() > 99 * 86_400_000;
+
 const styled = (node: HTMLElement, font: string, size: number, weight: number, color: string) => {
   node.style.fontFamily = fontFamiliesFor(font as SceneConfig['headlineFont']);
   node.style.fontWeight = String(weight); node.style.color = color;
@@ -21,17 +27,6 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
 
   const content = document.createElement('div'); content.className = 'scene-content';
   const stage = document.createElement('div'); stage.className = 'scene-stage';
-  const measure = document.createElement('div'); measure.className = 'scene-measure';
-  stage.append(measure);
-  const applyScale = () => {
-    const w = measure.clientWidth, h = measure.clientHeight;
-    if (w > 0 && h > 0) { root.style.setProperty('--vw', `${w / 100}px`); root.style.setProperty('--vh', `${h / 100}px`); }
-  };
-  applyScale();
-  const ro = 'ResizeObserver' in window ? new ResizeObserver(applyScale) : null;
-  ro?.observe(measure);
-  const stopObserve = () => ro?.disconnect();
-
   const panel = document.createElement('div'); panel.className = 'scene-panel';
   const headline = document.createElement('h1'); headline.className = 'scene-headline'; headline.textContent = config.headline;
   styled(headline, config.headlineFont, config.headlineSize, config.headlineWeight, config.headlineColor);
@@ -52,17 +47,30 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
   content.append(stage);
   root.append(content);
 
+  // Element-box scaling: drive --vw/--vh from the scene root's own dimensions so type fits the
+  // actual scene area (full viewport in the runtime, the 16:9 preview frame in the editor).
+  const applyScale = () => {
+    const w = root.clientWidth, h = root.clientHeight;
+    if (w > 0 && h > 0) { root.style.setProperty('--vw', `${w / 100}px`); root.style.setProperty('--vh', `${h / 100}px`); }
+  };
+  applyScale();
+  const ro = 'ResizeObserver' in window ? new ResizeObserver(applyScale) : null;
+  ro?.observe(root);
+  const stopObserve = () => ro?.disconnect();
+
   let revealed = false;
   const update = () => {
     const instant = now();
-    const display = countdownDisplay(config.countdownTarget, instant, false, 'auto');
+    const unscheduled = isUnscheduled(config.countdownTarget, instant);
+    number.style.visibility = unscheduled ? 'hidden' : '';
+    const display = unscheduled ? null : countdownDisplay(config.countdownTarget, instant, false, 'auto');
     // Reveal boundary: the 5s zero hold keeps the final countdown frame on screen, then the
     // message appears. rd=0 -> right after the hold (at zero+5s); each step adds a full minute.
-    const pastHold = config.countdownTarget && Date.parse(config.countdownTarget) + 5_000 + config.revealDelay * 60_000 <= instant.getTime();
-    number.textContent = display.kind === 'countdown' || display.kind === 'hold' ? display.text : '00:00:00';
+    const pastHold = !unscheduled && Date.parse(config.countdownTarget) + 5_000 + config.revealDelay * 60_000 <= instant.getTime();
+    number.textContent = display && (display.kind === 'countdown' || display.kind === 'hold') ? display.text : (unscheduled ? '' : '00:00:00');
     if (pastHold && !revealed) { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); }
   };
-  const showReveal = () => { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); number.textContent = '00:00:00'; };
+  const showReveal = () => { revealed = true; panel.classList.add('scene-hidden'); reveal.classList.add('scene-shown'); number.textContent = ''; };
   const hideReveal = () => { revealed = false; panel.classList.remove('scene-hidden'); reveal.classList.remove('scene-shown'); update(); };
   const stop = startClock(() => { applyScale(); update(); }, true);
   return { stop: () => { stop(); stopObserve(); }, update, showReveal, hideReveal };

@@ -124,7 +124,8 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     history.replaceState(null, '', `#${encodeSceneConfig(config)}`);
     const end = new Date(config.countdownTarget);
     const totalSeconds = Math.round((end.getTime() - Date.now()) / 1000);
-    byId('resolved-target').textContent = totalSeconds > 0 ? `Ends in ${Math.max(1, Math.round(totalSeconds / 60))} minutes` : 'It has ended';
+    const unscheduled = config.countdownTarget === '2099-12-31T23:59:00Z' || totalSeconds > 99 * 86_400;
+    byId('resolved-target').textContent = unscheduled ? 'Not scheduled yet — pick a time or use a quick duration.' : (totalSeconds > 0 ? `Ends in ${Math.max(1, Math.round(totalSeconds / 60))} minutes` : 'It has ended');
   };
   const setText = (key: 'headline' | 'subtitle' | 'reveal', value: string) => { config[key] = value; refresh(); };
   const validateText = (key: 'headline' | 'subtitle' | 'reveal', value: string, min: number, max: number) => {
