@@ -207,6 +207,10 @@ describe('scene editor', () => {
     const wallExists = wallTimeToInstant({ year: 2026, month: 3, day: 8, hour: 2, minute: 30 }) !== null;
     if (!wallExists) {
       expect(app.querySelector('#countdown-error')?.textContent).toContain('daylight-saving');
+      expect(date.getAttribute('aria-invalid')).toBe('true'); expect(time.getAttribute('aria-invalid')).toBe('true');
+      date.value = '2026-03-09'; time.value = '02:30'; time.dispatchEvent(new Event('change', { bubbles: true }));
+      expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+      expect(date.getAttribute('aria-invalid')).toBeNull(); expect(time.getAttribute('aria-invalid')).toBeNull();
     } else {
       // Zone without that gap: accept and verify exact round-trip instead.
       expect(app.querySelector('#countdown-error')?.textContent).toBe('');
