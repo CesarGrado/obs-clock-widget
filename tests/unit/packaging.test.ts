@@ -20,6 +20,11 @@ describe('deployment packaging', () => {
     }
   });
 
+  it('provides an ordered unit gate that builds packaging artifacts before testing them', () => {
+    const scripts = JSON.parse(read('package.json')).scripts as Record<string, string>;
+    expect(scripts['test:gate']).toBe('npm run build && vitest --run');
+  });
+
   it('documents packaged font attribution and emitted formats accurately', () => {
     const notices = read('THIRD_PARTY_NOTICES.md');
     expect(notices).toContain('- Inter — Copyright 2016 The Inter Project Authors');
