@@ -111,7 +111,7 @@ function buildEditor(app: HTMLElement) {
 
 export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: ClockConfig) => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
-  let clippingIssues: ClippingIssue[] = []; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
+  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const weightOptions = (n: number, fontId: string, weight: number) => {
     const control = byId<HTMLSelectElement>(`line${n}-weight`);
@@ -192,6 +192,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   };
   const scheduleClippingCheck = () => {
     const revision = ++clippingRevision;
+    clippingPending = true; clippingIssues = []; byId('clipping-warning').textContent = '';
     if (layoutFrame !== undefined) { cancelAnimationFrame(layoutFrame); layoutFrame = undefined; }
     measurementRoot?.remove();
     const viewport = selectedViewport();
@@ -204,6 +205,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     void afterSettledLayout(revision).then((settled) => {
       if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
       clippingIssues = clockClippingIssues(measurement, config, viewport);
+      clippingPending = false;
       byId('clipping-warning').textContent = clippingMessage(clippingIssues);
       measurement.remove(); if (measurementRoot === measurement) measurementRoot = undefined;
     });
@@ -343,7 +345,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     config = resetSnapshot; resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
     byId<HTMLButtonElement>('undo-reset').disabled = true; byId('copy-status').textContent = 'Previous settings restored.';
   });
-  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
+  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : clippingPending ? `${success.replace(/\.$/, '')}, but wait for the clipping check before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
   sync(); refresh(); return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };

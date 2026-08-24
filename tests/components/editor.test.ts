@@ -679,6 +679,43 @@ describe('clock editor', () => {
     Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   });
 
+  it('marks immediate copies pending instead of reusing stale clock clipping results', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-clock-measurement]')) return rect(0, 0, 800, 240);
+      if (this.matches('[data-clock-measurement] .clock-line:first-child')) return this.textContent?.includes('A') ? rect(-20, 0, 980, 260) : rect(20, 20, 300, 100);
+      return rect(20, 110, 300, 180);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    await vi.waitFor(() => expect(app.querySelector('#clipping-warning')?.textContent).toBe(''));
+
+    let releaseFonts!: () => void;
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: new Promise<void>((resolve) => { releaseFonts = resolve; }) } });
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = `'${'A'.repeat(62)}'`; format.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toContain('wait for the clipping check'));
+    releaseFonts();
+    await vi.waitFor(() => expect(app.querySelector('#clipping-warning')?.textContent).toContain('Line 1'));
+
+    let releaseRecovery!: () => void;
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: new Promise<void>((resolve) => { releaseRecovery = resolve; }) } });
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toContain('wait for the clipping check'));
+    expect(app.querySelector('#copy-status')?.textContent).not.toContain('fix the clipping warning');
+    releaseRecovery();
+
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();
