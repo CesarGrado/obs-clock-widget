@@ -11,6 +11,7 @@ import { renderScene } from '../scene/renderer';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant, instantToWallFields, timezoneLabel } from '../editor/tz';
 import { clippingCopySuccess } from '../editor/clipboard';
+import { createLayoutSettler } from '../editor/layout-settling';
 import { sceneClippingIssues } from '../geometry/scene-clipping';
 import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
 
@@ -115,7 +116,8 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   let config = location.hash ? decodeSceneConfig(location.hash) : cloneSceneConfig(DEFAULT_SCENE_CONFIG);
   let scheduleActive = !isUnscheduledTarget(config.countdownTarget);
   let scene: ReturnType<typeof renderScene> | undefined;
-  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
+  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let measurementRoot: HTMLElement | undefined;
+  const layoutSettler = createLayoutSettler();
 
   const sync = () => {
     byId<HTMLInputElement>('headline').value = config.headline; byId<HTMLInputElement>('subtitle').value = config.subtitle; byId<HTMLInputElement>('reveal').value = config.reveal;
@@ -145,13 +147,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     byId<HTMLSelectElement>('reveal-delay').value = String(config.revealDelay);
   };
   const clippingMessage = (issues: ClippingIssue[]) => issues.length === 0 ? '' : `Content is clipped at 1920×1080: ${issues.map((issue) => `${issue.label} (${issue.clippedEdges.join(', ')})`).join('; ')}. ${Array.from(new Set(issues.flatMap((issue) => issue.suggestedFixes))).join(' ')}`;
-  const afterSettledLayout = async (revision: number) => {
-    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
-    if (fonts) await fonts.ready;
-    if (revision !== clippingRevision) return false;
-    await new Promise<void>((resolve) => { layoutFrame = requestAnimationFrame(() => { layoutFrame = requestAnimationFrame(() => { layoutFrame = undefined; resolve(); }); }); });
-    return revision === clippingRevision;
-  };
+
   const evaluateMeasurement = (measurement: HTMLElement) => {
     const panel = measurement.querySelector<HTMLElement>('.scene-panel')!;
     const reveal = measurement.querySelector<HTMLElement>('.scene-reveal')!;
@@ -172,16 +168,15 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     return [...merged.values()];
   };
   const scheduleClippingCheck = () => {
-    const revision = ++clippingRevision; clippingPending = true; clippingIssues = []; byId('scene-clipping-warning').textContent = '';
-    if (layoutFrame !== undefined) { cancelAnimationFrame(layoutFrame); layoutFrame = undefined; }
+    clippingPending = true; clippingIssues = []; byId('scene-clipping-warning').textContent = '';
     measurementRoot?.remove();
     const source = byId('preview-root'); const measurement = source.cloneNode(true) as HTMLElement;
     measurement.removeAttribute('id'); measurement.classList.remove('scene-preview'); measurement.dataset.sceneMeasurement = ''; measurement.setAttribute('aria-hidden', 'true');
     Object.assign(measurement.style, { position: 'fixed', left: '-10000px', top: '0', right: 'auto', bottom: 'auto', width: '1920px', height: '1080px', pointerEvents: 'none', contain: 'strict' });
     measurement.style.setProperty('--vw', '19.2px'); measurement.style.setProperty('--vh', '10.8px');
     document.body.append(measurement); measurementRoot = measurement;
-    void afterSettledLayout(revision).then((settled) => {
-      if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
+    void layoutSettler.settle().then((settled) => {
+      if (!settled || !measurement.isConnected || measurementRoot !== measurement) return;
       clippingIssues = evaluateMeasurement(measurement); clippingPending = false;
       byId('scene-clipping-warning').textContent = clippingMessage(clippingIssues);
       measurement.remove(); if (measurementRoot === measurement) measurementRoot = undefined;
@@ -306,7 +301,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   layout.append(controls, previewPanel);
   app.append(layout);
   sync(); refresh();
-  return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
+  return { destroy: () => { layoutSettler.cancel(); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app');

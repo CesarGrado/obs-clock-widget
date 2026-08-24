@@ -14,6 +14,7 @@ import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant } from './tz';
 import { clippingCopySuccess } from './clipboard';
+import { createLayoutSettler } from './layout-settling';
 import { applyWidestClockSamples, clockClippingIssues } from '../geometry/clock-clipping';
 import type { ClippingIssue } from '../geometry/clipping';
 
@@ -112,7 +113,8 @@ function buildEditor(app: HTMLElement) {
 
 export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: ClockConfig) => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
-  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
+  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let measurementRoot: HTMLElement | undefined;
+  const layoutSettler = createLayoutSettler();
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const weightOptions = (n: number, fontId: string, weight: number) => {
     const control = byId<HTMLSelectElement>(`line${n}-weight`);
@@ -184,17 +186,8 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     return { width: width!, height: height! };
   };
   const clippingMessage = (issues: ClippingIssue[]) => issues.length === 0 ? '' : `Content is clipped at ${byId<HTMLSelectElement>('obs-size').value}: ${issues.map((issue) => `${issue.label} (${issue.clippedEdges.join(', ')})`).join('; ')}. ${Array.from(new Set(issues.flatMap((issue) => issue.suggestedFixes))).join(' ')}`;
-  const afterSettledLayout = async (revision: number) => {
-    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
-    if (fonts) await fonts.ready;
-    if (revision !== clippingRevision) return false;
-    await new Promise<void>((resolve) => { layoutFrame = requestAnimationFrame(() => { layoutFrame = requestAnimationFrame(() => { layoutFrame = undefined; resolve(); }); }); });
-    return revision === clippingRevision;
-  };
   const scheduleClippingCheck = () => {
-    const revision = ++clippingRevision;
     clippingPending = true; clippingIssues = []; byId('clipping-warning').textContent = '';
-    if (layoutFrame !== undefined) { cancelAnimationFrame(layoutFrame); layoutFrame = undefined; }
     measurementRoot?.remove();
     const viewport = selectedViewport();
     const source = byId('preview-root');
@@ -203,8 +196,8 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     measurement.setAttribute('aria-hidden', 'true');
     Object.assign(measurement.style, { position: 'fixed', left: '-10000px', top: '0', width: `${viewport.width}px`, height: `${viewport.height}px`, pointerEvents: 'none', contain: 'strict' });
     document.body.append(measurement); measurementRoot = measurement;
-    void afterSettledLayout(revision).then((settled) => {
-      if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
+    void layoutSettler.settle().then((settled) => {
+      if (!settled || !measurement.isConnected || measurementRoot !== measurement) return;
       applyWidestClockSamples(measurement, config);
       clippingIssues = clockClippingIssues(measurement, config, viewport);
       clippingPending = false;
@@ -353,7 +346,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
-  sync(); refresh(); return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
+  sync(); refresh(); return { destroy: () => { layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);
