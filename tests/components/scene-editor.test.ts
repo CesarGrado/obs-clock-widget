@@ -145,6 +145,42 @@ describe('scene editor', () => {
     expect((app.querySelector('#countdown-time') as HTMLInputElement).value).toBe(`${get('hour') === '24' ? '00' : get('hour')}:${get('minute')}`);
     editor.destroy(); vi.useRealTimers();
   });
+  it('keeps date/time errors linked and exported state unchanged through missing, >99-day, and recovery states', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!;
+    const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+
+    date.value = ''; time.value = '';
+    date.dispatchEvent(new Event('change', { bubbles: true }));
+    time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-describedby')).toContain('countdown-date-error');
+    expect(time.getAttribute('aria-describedby')).toContain('countdown-time-error');
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#countdown-date-error')?.textContent).toContain('date');
+    expect(app.querySelector('#countdown-time-error')?.textContent).toContain('time');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+
+    date.value = '2026-12-31'; time.value = '12:00';
+    date.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+
+    date.value = '2026-08-25'; time.value = '19:30';
+    time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-invalid')).toBeNull();
+    expect(time.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-date-error')?.textContent).toBe('');
+    expect(app.querySelector('#countdown-time-error')?.textContent).toBe('');
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toBe(beforeUrl);
+    editor.destroy(); vi.useRealTimers();
+  });
   it('schedules a normal date/time as a DST-safe absolute instant', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement;

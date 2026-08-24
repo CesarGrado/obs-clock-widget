@@ -81,8 +81,10 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const quick = element('div', { class: 'quick-buttons', role: 'group', 'aria-label': 'Quick countdown durations' });
     for (const minutes of [5, 10, 15, 30, 60]) quick.append(element('button', { id: `quick-${minutes}`, type: 'button', class: 'quick-button', 'data-minutes': String(minutes) }, `${minutes} min`));
     const schedule = element('div', { class: 'schedule-row' });
-    labeled(schedule, 'Date', element('input', { id: 'countdown-date', type: 'date' }));
-    labeled(schedule, 'Time', element('input', { id: 'countdown-time', type: 'time' }));
+    labeled(schedule, 'Date', element('input', { id: 'countdown-date', type: 'date', required: '', 'aria-describedby': 'countdown-date-error countdown-error' }));
+    schedule.append(element('p', { id: 'countdown-date-error', class: 'error', role: 'alert' }));
+    labeled(schedule, 'Time', element('input', { id: 'countdown-time', type: 'time', required: '', 'aria-describedby': 'countdown-time-error countdown-error' }));
+    schedule.append(element('p', { id: 'countdown-time-error', class: 'error', role: 'alert' }));
     const tz = element('span', { id: 'countdown-timezone', class: 'hint' }); tz.textContent = timezoneLabel();
     schedule.append(tz);
     const delay = element('select', { id: 'reveal-delay', 'aria-label': 'Delay before the zero message appears' });
@@ -172,22 +174,38 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   }
   SCENE_THEMES.forEach((theme) => byId(`theme-${theme}`).addEventListener('change', () => { config.theme = theme; sync(); refresh(); }));
   SCENE_MOTION.forEach((motion) => byId(`motion-${motion}`).addEventListener('change', () => { config.motion = motion; refresh(); }));
+  const clearScheduleErrors = () => {
+    for (const key of ['date', 'time'] as const) {
+      byId<HTMLInputElement>(`countdown-${key}`).removeAttribute('aria-invalid');
+      byId(`countdown-${key}-error`).textContent = '';
+    }
+    byId('countdown-error').textContent = '';
+  };
+  const setScheduleError = (message: string) => {
+    for (const key of ['date', 'time'] as const) byId<HTMLInputElement>(`countdown-${key}`).setAttribute('aria-invalid', 'true');
+    byId('countdown-error').textContent = message;
+  };
   app.querySelectorAll<HTMLButtonElement>('.quick-button').forEach((button) => button.addEventListener('click', () => {
     const minutes = Number(button.dataset.minutes);
     config.countdownTarget = new Date(Date.now() + minutes * 60_000).toISOString().replace('.000Z', 'Z');
-    syncCountdownInputs(); byId('countdown-error').textContent = ''; refresh();
+    syncCountdownInputs(); clearScheduleErrors(); refresh();
   }));
   const scheduleFromInputs = () => {
     const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
-    if (!dateValue) return;
-    const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
+    clearScheduleErrors();
+    if (!dateValue || !timeValue) {
+      if (!dateValue) { byId<HTMLInputElement>('countdown-date').setAttribute('aria-invalid', 'true'); byId('countdown-date-error').textContent = 'Pick a date.'; }
+      if (!timeValue) { byId<HTMLInputElement>('countdown-time').setAttribute('aria-invalid', 'true'); byId('countdown-time-error').textContent = 'Pick a time.'; }
+      return;
+    }
+    const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = timeValue.split(':').map(Number);
     // DST-safe wall→instant conversion (candidate enumeration + round-trip, first occurrence, gap rejection).
     const absolute = wallTimeToInstant({ year: year!, month: month ?? 1, day: day!, hour: hour ?? 0, minute: minute ?? 0 });
-    if (!absolute) { byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.'; return; }
+    if (!absolute) { setScheduleError('That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.'); return; }
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
-    if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time.'; return; }
-    if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away.'; return; }
-    config.countdownTarget = iso; byId('countdown-error').textContent = ''; refresh();
+    if (!isAbsoluteIsoTarget(iso)) { setScheduleError('Pick a valid date and time.'); return; }
+    if (absolute.getTime() - Date.now() > 99 * 86_400_000) { setScheduleError('That time is more than 99 days away.'); return; }
+    config.countdownTarget = iso; refresh();
   };
   byId('countdown-date').addEventListener('change', scheduleFromInputs);
   byId('countdown-time').addEventListener('change', scheduleFromInputs);
