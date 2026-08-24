@@ -70,25 +70,31 @@ describe('scene codec', () => {
     expect(decodeSceneConfig('v=1&hw=350')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&hw=800')).toEqual(DEFAULT_SCENE_CONFIG);
   });
-  it('enforces canonical key order, default-field omission, and rejects noncanonical fragments', () => {
-    // Noncanonical key ORDER: 'h' before 'v' is rejected (encoder always leads with v=1).
+  it('enforces canonical key order, default-field omission, exact raw encoding, and rejects noncanonical fragments', () => {
+    // Must REJECT — noncanonical key order.
     expect(decodeSceneConfig('h=GAME&v=1')).toEqual(DEFAULT_SCENE_CONFIG);
-    // Redundant DEFAULT-valued field: headline equals the default, which the encoder omits.
+    // Must REJECT — redundant default-valued field (encoder omits it).
     expect(decodeSceneConfig('v=1&h=STREAM+STARTING+SOON')).toEqual(DEFAULT_SCENE_CONFIG);
+    // Must REJECT — noncanonical raw encodings (decoded-to-decoded equivalence is NOT allowed).
+    expect(decodeSceneConfig('v=1&h=%41')).toEqual(DEFAULT_SCENE_CONFIG);          // %41 should be 'A'
+    expect(decodeSceneConfig('v=1&h=GAME%20NIGHT')).toEqual(DEFAULT_SCENE_CONFIG);  // encoder emits '+'
+    expect(decodeSceneConfig('v=1&ct=2026-09-01T23:59:00Z')).toEqual(DEFAULT_SCENE_CONFIG); // ':' should be %3A
     // Other default-valued redundancies are also rejected.
     expect(decodeSceneConfig('v=1&th=dark-gradient')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&mo=subtle')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&rd=1')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&a=center')).toEqual(DEFAULT_SCENE_CONFIG);
-    // Empty (all defaults) canonical fragment is valid.
+    // Must ACCEPT — empty (all defaults) canonical fragment.
     expect(decodeSceneConfig('v=1')).toEqual(DEFAULT_SCENE_CONFIG);
-    // Valid partial canonical fragment (non-default headline, canonical order) is preserved.
+    // Must ACCEPT — valid partial canonical fragment (non-default headline, canonical order).
     const ok = decodeSceneConfig('v=1&h=GAME');
     expect(ok.headline).toBe('GAME');
-    // Multi-key canonical fragment in correct order with non-default values is preserved.
-    const ok2 = decodeSceneConfig('v=1&h=GAME+NIGHT&th=neon-blue&mo=none&rd=2');
+    // Must ACCEPT — canonical '+' encoding and %3A colons.
+    const ok2 = decodeSceneConfig('v=1&h=GAME+NIGHT&ct=2026-09-01T23%3A59%3A00Z');
     expect(ok2.headline).toBe('GAME NIGHT');
-    expect(ok2.theme).toBe('neon-blue');
+    expect(ok2.countdownTarget).toBe('2026-09-01T23:59:00Z');
+    // Canonical hex case is accepted (%2F == %2f).
+    expect(decodeSceneConfig('v=1&h=GAME%2fNIGHT').headline).toBe('GAME/NIGHT');
   });
   it('round-trips canonical fragments byte-for-byte (decode then re-encode equals input)', () => {
     // Uses a non-default ct so it is not elided as a default during re-encode. Key order follows
@@ -96,6 +102,14 @@ describe('scene codec', () => {
     const canonical = 'v=1&h=GAME+NIGHT&sub=see+you+soon&ct=2026-12-31T23%3A59%3A00Z&th=neon-blue&mo=none&rv=GO&rd=2';
     const decoded = decodeSceneConfig(canonical);
     expect(encodeSceneConfig(decoded)).toBe(canonical);
+    // Every accepted canonical fragment round-trips byte-for-byte.
+    for (const frag of [
+      'v=1&h=GAME',
+      'v=1&h=GAME+NIGHT&ct=2026-09-01T23%3A59%3A00Z',
+      'v=1&h=GAME+NIGHT&sub=see+you+soon&ct=2026-12-31T23%3A59%3A00Z&th=neon-blue&mo=none&rv=GO&rd=2',
+    ]) {
+      expect(encodeSceneConfig(decodeSceneConfig(frag))).toBe(frag);
+    }
   });
   it('survives fuzzed fragments and rejects injection payloads', () => {
     const payloads = ['', '#', 'v', '=1', 'v=1&', '%', '%zz', 'v=1&h=%zz', 'v=1&h=<script>alert(1)</script>',

@@ -64,22 +64,25 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
 
     // Canonical-contract check: the raw fragment must be an ordered subsequence of the encoder's
     // canonical key/value pairs. This enforces (a) canonical key order, (b) rejection of redundant
-    // default-valued keys the encoder would omit, and (c) per-value canonical percent encoding.
-    // Compare values in their DECODED form so '+'/'%20' and hex-case differences are treated equal,
-    // while truly noncanonical encodings (%41) still fail because they decode differently.
+    // default-valued keys the encoder would omit, and (c) exact raw percent-encoding: the raw value
+    // must equal the encoder's own serialization. We normalize only hex CASE (so %2f == %2F) but
+    // leave '+' vs '%20' and '%41' vs 'A' distinct, so noncanonical encodings are rejected.
     const canonical = canonicalPairs(c);
     const canonicalKeys = canonical.map(([k]) => k);
     if (!isOrderedSubsequence(rawKeys(raw), canonicalKeys)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     for (const [key, rawValue] of rawPairs(raw)) {
       const expected = canonical.find(([k]) => k === key)?.[1];
       if (expected === undefined) return cloneSceneConfig(DEFAULT_SCENE_CONFIG); // redundant default key
-      const decode = (s: string) => decodeURIComponent(s.replace(/\+/g, ' '));
-      if (decode(expected) !== decode(rawValue)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+      // Re-encode the canonical (decoded) value the same way the encoder serializes it, then compare
+      // raw-to-raw. This rejects %41/%20/raw-colon while accepting + and %2F (hex-case normalized).
+      const expectedRaw = new URLSearchParams({ [key]: expected }).toString().slice(key.length + 1);
+      if (normHex(rawValue) !== normHex(expectedRaw)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     }
     return normalizeSceneConfig(c);
   } catch { return cloneSceneConfig(DEFAULT_SCENE_CONFIG); }
 }
 
+const normHex = (s: string) => s.replace(/%([0-9a-fA-F]{2})/g, (_m, h) => `%${h.toUpperCase()}`);
 const rawKeys = (raw: string): string[] => raw.split('&').map((pair) => pair.slice(0, pair.indexOf('=')));
 const rawPairs = (raw: string): Array<[string, string]> => raw.split('&').map((pair) => { const eq = pair.indexOf('='); return [pair.slice(0, eq), pair.slice(eq + 1)]; });
 const isOrderedSubsequence = (sub: string[], full: string[]): boolean => {
