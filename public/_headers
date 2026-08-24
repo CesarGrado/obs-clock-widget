@@ -12,5 +12,11 @@
 /editor/*
   Cache-Control: public, max-age=0, must-revalidate
 
+/scene-editor/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /v1/clock/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/v1/scene/*
   Cache-Control: public, max-age=0, must-revalidate

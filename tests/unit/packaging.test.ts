@@ -13,6 +13,13 @@ describe('deployment packaging', () => {
     expect(read('public/_headers').split('\n')[0]).toMatch(/^#/);
   });
 
+  it('sets explicit revalidation rules for both scene editor and scene runtime HTML routes', () => {
+    const headers = read('public/_headers');
+    for (const route of ['/scene-editor/*', '/v1/scene/*']) {
+      expect(headers).toContain(`${route}\n  Cache-Control: public, max-age=0, must-revalidate`);
+    }
+  });
+
   it('documents packaged font attribution and emitted formats accurately', () => {
     const notices = read('THIRD_PARTY_NOTICES.md');
     expect(notices).toContain('- Inter — Copyright 2016 The Inter Project Authors');
