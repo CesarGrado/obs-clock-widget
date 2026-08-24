@@ -26,6 +26,8 @@
 .quick-button{padding:.5rem .9rem;border-radius:8px;border:1px solid #292e42;background:#0d1120;color:#dbe1f5;cursor:pointer;font-weight:600}
 .quick-button:hover,.quick-button:focus-visible{border-color:#53e0c1}
 .schedule-row{display:grid;grid-template-columns:1fr 1fr auto;gap:.6rem;align-items:end;min-width:0}
+.schedule-field{display:grid;gap:.35rem;min-width:0}
+.schedule-field .error{margin:0}
 .schedule-row input{min-width:0}
 .app-header{max-width:1500px;margin:auto;padding:clamp(1rem,3vw,2.5rem)}
 .app-header a{color:#53e0c1}
