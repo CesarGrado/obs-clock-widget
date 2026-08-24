@@ -16,6 +16,7 @@ export interface RenderedElementBounds {
   enabled: boolean;
   visible: boolean;
   bounds: RenderedBounds;
+  paintMargins?: RenderedBounds;
   suggestedFixes: string[];
 }
 
@@ -35,11 +36,12 @@ export function evaluateElementBounds(
   return elements.flatMap((element) => {
     if (!element.enabled || !element.visible) return [];
 
+    const margins = element.paintMargins ?? { left: 0, top: 0, right: 0, bottom: 0 };
     const clippedEdges: ClippedEdge[] = [];
-    if (element.bounds.left < 0) clippedEdges.push('left');
-    if (element.bounds.top < 0) clippedEdges.push('top');
-    if (element.bounds.right > viewport.width) clippedEdges.push('right');
-    if (element.bounds.bottom > viewport.height) clippedEdges.push('bottom');
+    if (element.bounds.left - margins.left < 0) clippedEdges.push('left');
+    if (element.bounds.top - margins.top < 0) clippedEdges.push('top');
+    if (element.bounds.right + margins.right > viewport.width) clippedEdges.push('right');
+    if (element.bounds.bottom + margins.bottom > viewport.height) clippedEdges.push('bottom');
 
     return clippedEdges.length === 0 ? [] : [{
       elementId: element.elementId,

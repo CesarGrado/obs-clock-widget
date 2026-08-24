@@ -26,4 +26,24 @@ describe('element-bounds clipping', () => {
       ],
     }]);
   });
+
+  it('includes stroke and shadow paint margins that extend past the element box', () => {
+    expect(evaluateElementBounds(
+      { width: 800, height: 240 },
+      [{
+        elementId: 'clock-line-2',
+        label: 'Line 2',
+        enabled: true,
+        visible: true,
+        bounds: { left: 8, top: 8, right: 792, bottom: 232 },
+        paintMargins: { left: 9, top: 9, right: 31, bottom: 41 },
+        suggestedFixes: ['Reduce Stroke or Shadow.'],
+      }],
+    )).toEqual([{
+      elementId: 'clock-line-2',
+      label: 'Line 2',
+      clippedEdges: ['left', 'top', 'right', 'bottom'],
+      suggestedFixes: ['Reduce Stroke or Shadow.'],
+    }]);
+  });
 });
