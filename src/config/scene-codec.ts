@@ -62,34 +62,16 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     if (p.has('rd')) c.revealDelay = numeric('rd', c.revealDelay, 0, 3) as SceneConfig['revealDelay'];
     if (p.has('a')) c.align = p.get('a') as SceneConfig['align'];
 
-    // Canonical-contract check: the raw fragment must be an ordered subsequence of the encoder's
-    // canonical key/value pairs. This enforces (a) canonical key order, (b) rejection of redundant
-    // default-valued keys the encoder would omit, and (c) exact raw percent-encoding: the raw value
-    // must equal the encoder's own serialization. We normalize only hex CASE (so %2f == %2F) but
-    // leave '+' vs '%20' and '%41' vs 'A' distinct, so noncanonical encodings are rejected.
-    const canonical = canonicalPairs(c);
-    const canonicalKeys = canonical.map(([k]) => k);
-    if (!isOrderedSubsequence(rawKeys(raw), canonicalKeys)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
-    for (const [key, rawValue] of rawPairs(raw)) {
-      const expected = canonical.find(([k]) => k === key)?.[1];
-      if (expected === undefined) return cloneSceneConfig(DEFAULT_SCENE_CONFIG); // redundant default key
-      // Re-encode the canonical (decoded) value the same way the encoder serializes it, then compare
-      // raw-to-raw. This rejects %41/%20/raw-colon while accepting + and %2F (hex-case normalized).
-      const expectedRaw = new URLSearchParams({ [key]: expected }).toString().slice(key.length + 1);
-      if (normHex(rawValue) !== normHex(expectedRaw)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
-    }
+    // Canonical-contract check: after parsing and normalizing, re-encode the candidate and require
+    // EXACT byte-for-byte equality with the raw fragment. This single invariant simultaneously
+    // enforces canonical key order, default-field omission, required normalized fields (e.g. the
+    // font-only `hf=bebas-neue` clamp yields `hw=400`), exact percent-encoding, and uppercase hex
+    // escapes — so any noncanonical input (bad order, redundant default, %41/%20/raw-colon, lowercase
+    // %2f/%3a, or a font swap that normalizes into extra fields) is rejected.
+    if (encodeSceneConfig(normalizeSceneConfig(c)) !== raw) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     return normalizeSceneConfig(c);
   } catch { return cloneSceneConfig(DEFAULT_SCENE_CONFIG); }
 }
-
-const normHex = (s: string) => s.replace(/%([0-9a-fA-F]{2})/g, (_m, h) => `%${h.toUpperCase()}`);
-const rawKeys = (raw: string): string[] => raw.split('&').map((pair) => pair.slice(0, pair.indexOf('=')));
-const rawPairs = (raw: string): Array<[string, string]> => raw.split('&').map((pair) => { const eq = pair.indexOf('='); return [pair.slice(0, eq), pair.slice(eq + 1)]; });
-const isOrderedSubsequence = (sub: string[], full: string[]): boolean => {
-  let i = 0;
-  for (const item of full) { if (sub[i] === item) i++; if (i === sub.length) return true; }
-  return i === sub.length;
-};
 
 export function hasUnsupportedSceneVersion(fragment: string): boolean {
   try {
