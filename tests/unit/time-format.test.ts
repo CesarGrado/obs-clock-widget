@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { LOCALES } from '../../src/config/defaults';
 import { formatClock, validateFormat } from '../../src/time/format';
 
@@ -24,6 +24,23 @@ describe('clock token formatter', () => {
   it('produces valid numeric output for every allowlisted locale', () => {
     for (const locale of LOCALES) {
       expect(formatClock(instant, 'YYYY M D HH H hh h mm m ss s', 'UTC', locale)).not.toContain('NaN');
+    }
+  });
+  it('reuses Intl formatters for repeated geometry samples', () => {
+    const NativeDateTimeFormat = Intl.DateTimeFormat;
+    const NativeNumberFormat = Intl.NumberFormat;
+    const dateTime = vi.fn((locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => new NativeDateTimeFormat(locales, options));
+    const number = vi.fn((locales?: Intl.LocalesArgument, options?: Intl.NumberFormatOptions) => new NativeNumberFormat(locales, options));
+    Object.defineProperty(Intl, 'DateTimeFormat', { configurable: true, value: dateTime });
+    Object.defineProperty(Intl, 'NumberFormat', { configurable: true, value: number });
+    try {
+      formatClock(instant, 'HH:mm:ss', 'Pacific/Kiritimati', 'en-US-u-nu-fullwide');
+      const afterFirst = { dateTime: dateTime.mock.calls.length, number: number.mock.calls.length };
+      formatClock(new Date(instant.getTime() + 1_000), 'HH:mm:ss', 'Pacific/Kiritimati', 'en-US-u-nu-fullwide');
+      expect({ dateTime: dateTime.mock.calls.length, number: number.mock.calls.length }).toEqual(afterFirst);
+    } finally {
+      Object.defineProperty(Intl, 'DateTimeFormat', { configurable: true, value: NativeDateTimeFormat });
+      Object.defineProperty(Intl, 'NumberFormat', { configurable: true, value: NativeNumberFormat });
     }
   });
   it('rejects unsupported tokens and unterminated literals', () => {
