@@ -32,9 +32,14 @@ describe('clock clipping', () => {
     const dates = clockTextCandidates(config, 1);
     expect(dates).toContain('Friday, September 1, 2028');
     expect(dates.some((text) => text.includes('Wednesday, November'))).toBe(true);
+    config.lines[0].format = 'HH:mm:ss';
+    expect(clockTextCandidates(config, 0)).toContain('00:00:00');
 
-    config.mode = 'countdown'; config.countdownTarget = '2028-12-31T23:59:59Z'; config.overtime = true;
+    config.mode = 'countdown'; config.countdownTarget = '2028-12-31T23:59:59Z'; config.overtime = true; config.lines[0].format = `'${'A'.repeat(62)}'`;
     const countdowns = clockTextCandidates(config, 0);
+    expect(countdowns.some((text) => text.includes('A'))).toBe(false);
+    expect(countdowns).toContain('99d+');
+    expect(countdowns).toContain('99d 00:00:00');
     expect(countdowns).toContain('98d 23:59:59');
     expect(countdowns).toContain('+99d 00:00:00');
     expect(countdowns).toContain('00:00:00');

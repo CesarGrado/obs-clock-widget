@@ -166,6 +166,43 @@ test('warns for the widest localized future date even while the current runtime 
   await runtime.close();
 });
 
+test('warns when Cabin zero digits will clip later even though the current time fits', async ({ page, context }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-font').selectOption('cabin'); await page.locator('#line1-weight').selectOption('700');
+  await page.locator('#line1-size').fill('180'); await page.locator('#line1-format').fill('HH:mm:ss');
+  await page.locator('#stroke').fill('0'); await page.locator('#shadow').fill('0');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+  await expect(page.locator('#clipping-warning')).toContainText('Line 1');
+
+  const runtime = await context.newPage(); await runtime.setViewportSize({ width: 800, height: 240 });
+  await runtime.goto(await page.locator('#obs-url').inputValue()); await runtime.evaluate(() => document.fonts.ready);
+  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeLessThan(800);
+  await runtime.locator('.clock-line').evaluate((node) => { node.textContent = '00:00:00'; });
+  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeGreaterThan(800);
+  await runtime.close();
+});
+
+test('does not warn from an unreachable clock literal during countdown overtime', async ({ page, context }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.locator('label.mode-card[for="mode-countdown"]').click(); await page.locator('#quick-10').click();
+  await page.getByLabel('Continue counting up').check();
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-font').selectOption('cabin'); await page.locator('#line1-weight').selectOption('700');
+  await page.locator('#line1-size').fill('80'); await page.locator('#line1-format').fill(`'${'A'.repeat(62)}'`);
+  await page.locator('#stroke').fill('0'); await page.locator('#shadow').fill('0');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+  await expect(page.locator('#clipping-warning')).toHaveText('');
+
+  const runtime = await context.newPage(); await runtime.setViewportSize({ width: 800, height: 240 });
+  await runtime.goto(await page.locator('#obs-url').inputValue()); await runtime.evaluate(() => document.fonts.ready);
+  expect(await runtime.locator('.clock-line').textContent()).toMatch(/^00:0\d:\d{2}$/);
+  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeLessThan(800);
+  await runtime.close();
+});
+
 test('undoes an accidental reset and clearly marks the unavailable action', async ({ page }) => {
   await page.goto('/editor/');
   const format = page.locator('#line1-format'); const undo = page.getByRole('button', { name: 'Undo reset' });
