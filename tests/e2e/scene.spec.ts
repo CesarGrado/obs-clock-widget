@@ -1,6 +1,22 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
+
+test('scene editor exposes one page H1 and a named, non-heading preview', async ({ page }) => {
+  await page.goto('/scene-editor/');
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Starting Soon Scene Builder');
+  const preview = page.getByRole('region', { name: 'Scene preview' });
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole('heading', { level: 2, name: 'Scene preview' })).toBeVisible();
+  await expect(page.locator('#preview-root .scene-headline')).toHaveText('STREAM STARTING SOON');
+  await expect(page.locator('#preview-root .scene-headline')).not.toHaveRole('heading');
+
+  const results = await new AxeBuilder({ page }).analyze();
+  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact ?? ''))).toEqual([]);
+});
+
 test('scene builder produces a working full-screen scene URL', async ({ page, context }) => {
   await page.goto('/scene-editor/');
   await expect(page.locator('#preview-root .scene-headline')).toHaveText('STREAM STARTING SOON');

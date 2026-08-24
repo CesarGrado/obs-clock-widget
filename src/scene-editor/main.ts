@@ -130,7 +130,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   const refresh = () => {
     scene?.stop();
     const preview = byId('preview-root');
-    scene = renderScene(preview, config);
+    scene = renderScene(preview, config, undefined, { preview: true });
     if (byId<HTMLInputElement>('preview-zero').checked) scene.showReveal(); else scene.hideReveal();
     byId<HTMLInputElement>('scene-url').value = sceneUrl(config);
     history.replaceState(null, '', `#${encodeSceneConfig(config)}`);
@@ -217,8 +217,8 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   byId('copy-url').addEventListener('click', () => void copy(sceneUrl(config), 'Scene URL copied.'));
   byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'));
 
-  const previewPanel = element('div', { class: 'preview-panel', id: 'preview-panel' });
-  previewPanel.append(element('h2', {}, 'Scene preview'));
+  const previewPanel = element('section', { class: 'preview-panel', id: 'preview-panel', 'aria-labelledby': 'scene-preview-heading' });
+  previewPanel.append(element('h2', { id: 'scene-preview-heading' }, 'Scene preview'));
   const frame = element('div', { class: 'scene-frame' });
   frame.append(element('div', { id: 'preview-root', class: 'scene-preview' }));
   previewPanel.append(frame);

@@ -4,6 +4,7 @@ import { startClock } from '../time/scheduler';
 import { countdownDisplay } from '../time/countdown';
 
 export type SceneControls = { stop: () => void; update: () => void; showReveal: () => void; hideReveal: () => void };
+export type SceneRenderOptions = { preview?: boolean };
 
 // Far-future sentinel used as the "no time set yet" template default. The runtime treats it (and
 // anything more than 99 days out) as unscheduled: the countdown number is hidden so a freshly
@@ -17,7 +18,7 @@ const styled = (node: HTMLElement, font: string, size: number, weight: number, c
   node.style.setProperty('--size', `${size}px`);
 };
 
-export function renderScene(root: HTMLElement, config: SceneConfig, now: () => Date = () => new Date()): SceneControls {
+export function renderScene(root: HTMLElement, config: SceneConfig, now: () => Date = () => new Date(), options: SceneRenderOptions = {}): SceneControls {
   root.replaceChildren();
   if (!root.classList.contains('scene-root')) root.classList.add('scene-root');
   root.setAttribute('data-theme', config.theme);
@@ -28,7 +29,7 @@ export function renderScene(root: HTMLElement, config: SceneConfig, now: () => D
   const content = document.createElement('div'); content.className = 'scene-content';
   const stage = document.createElement('div'); stage.className = 'scene-stage';
   const panel = document.createElement('div'); panel.className = 'scene-panel';
-  const headline = document.createElement('h1'); headline.className = 'scene-headline'; headline.textContent = config.headline;
+  const headline = document.createElement(options.preview ? 'div' : 'h1'); headline.className = 'scene-headline'; headline.textContent = config.headline;
   styled(headline, config.headlineFont, config.headlineSize, config.headlineWeight, config.headlineColor);
   panel.append(headline);
   if (config.subtitle) {
