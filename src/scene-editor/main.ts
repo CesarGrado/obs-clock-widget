@@ -10,6 +10,8 @@ import { cloneSceneConfig } from '../config/clone';
 import { renderScene } from '../scene/renderer';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant, instantToWallFields, timezoneLabel } from '../editor/tz';
+import { sceneClippingIssues } from '../geometry/scene-clipping';
+import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -105,13 +107,14 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     actions.append(element('label', { for: 'preview-zero' }, 'Preview zero state'));
     actions.append(element('input', { id: 'preview-zero', type: 'checkbox' }));
     const url = element('input', { id: 'scene-url', type: 'text', readonly: '' }); labeled(actions, 'Scene URL', url);
-    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }));
+    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
     app.append(actions);
   };
   build();
   let config = location.hash ? decodeSceneConfig(location.hash) : cloneSceneConfig(DEFAULT_SCENE_CONFIG);
   let scheduleActive = !isUnscheduledTarget(config.countdownTarget);
   let scene: ReturnType<typeof renderScene> | undefined;
+  let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
 
   const sync = () => {
     byId<HTMLInputElement>('headline').value = config.headline; byId<HTMLInputElement>('subtitle').value = config.subtitle; byId<HTMLInputElement>('reveal').value = config.reveal;
@@ -140,6 +143,49 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     time.value = wall.time;
     byId<HTMLSelectElement>('reveal-delay').value = String(config.revealDelay);
   };
+  const clippingMessage = (issues: ClippingIssue[]) => issues.length === 0 ? '' : `Content is clipped at 1920×1080: ${issues.map((issue) => `${issue.label} (${issue.clippedEdges.join(', ')})`).join('; ')}. ${Array.from(new Set(issues.flatMap((issue) => issue.suggestedFixes))).join(' ')}`;
+  const afterSettledLayout = async (revision: number) => {
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+    if (fonts) await fonts.ready;
+    if (revision !== clippingRevision) return false;
+    await new Promise<void>((resolve) => { layoutFrame = requestAnimationFrame(() => { layoutFrame = requestAnimationFrame(() => { layoutFrame = undefined; resolve(); }); }); });
+    return revision === clippingRevision;
+  };
+  const evaluateMeasurement = (measurement: HTMLElement) => {
+    const panel = measurement.querySelector<HTMLElement>('.scene-panel')!;
+    const reveal = measurement.querySelector<HTMLElement>('.scene-reveal')!;
+    const content = measurement.querySelector<HTMLElement>('.scene-content')!;
+    content.style.animation = 'none'; panel.style.transition = 'none'; reveal.style.transition = 'none';
+    const transforms = config.motion === 'subtle' ? ['translateY(-0.4%) scale(1.004)', 'translateY(0.4%) scale(1.008)'] : ['none'];
+    const observed: ClippingIssue[] = [];
+    for (const showReveal of [false, true]) {
+      panel.classList.toggle('scene-hidden', showReveal); reveal.classList.toggle('scene-shown', showReveal);
+      for (const transform of transforms) { content.style.transform = transform; observed.push(...sceneClippingIssues(measurement, config, { width: 1920, height: 1080 })); }
+    }
+    const merged = new Map<string, ClippingIssue & { clippedEdges: ClippedEdge[] }>();
+    for (const issue of observed) {
+      const current = merged.get(issue.elementId);
+      if (!current) merged.set(issue.elementId, { ...issue, clippedEdges: [...issue.clippedEdges] });
+      else for (const edge of issue.clippedEdges) if (!current.clippedEdges.includes(edge)) current.clippedEdges.push(edge);
+    }
+    return [...merged.values()];
+  };
+  const scheduleClippingCheck = () => {
+    const revision = ++clippingRevision; clippingPending = true; clippingIssues = []; byId('scene-clipping-warning').textContent = '';
+    if (layoutFrame !== undefined) { cancelAnimationFrame(layoutFrame); layoutFrame = undefined; }
+    measurementRoot?.remove();
+    const source = byId('preview-root'); const measurement = source.cloneNode(true) as HTMLElement;
+    measurement.removeAttribute('id'); measurement.classList.remove('scene-preview'); measurement.dataset.sceneMeasurement = ''; measurement.setAttribute('aria-hidden', 'true');
+    Object.assign(measurement.style, { position: 'fixed', left: '-10000px', top: '0', right: 'auto', bottom: 'auto', width: '1920px', height: '1080px', pointerEvents: 'none', contain: 'strict' });
+    measurement.style.setProperty('--vw', '19.2px'); measurement.style.setProperty('--vh', '10.8px');
+    document.body.append(measurement); measurementRoot = measurement;
+    void afterSettledLayout(revision).then((settled) => {
+      if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
+      clippingIssues = evaluateMeasurement(measurement); clippingPending = false;
+      byId('scene-clipping-warning').textContent = clippingMessage(clippingIssues);
+      measurement.remove(); if (measurementRoot === measurement) measurementRoot = undefined;
+    });
+  };
   const refresh = () => {
     scene?.stop();
     const preview = byId('preview-root');
@@ -151,6 +197,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const totalSeconds = Math.round((end.getTime() - Date.now()) / 1000);
     const unscheduled = isUnscheduledTarget(config.countdownTarget);
     byId('resolved-target').textContent = unscheduled ? 'Not scheduled yet — pick a time or use a quick duration.' : (totalSeconds > 0 ? `Ends in ${Math.max(1, Math.round(totalSeconds / 60))} minutes` : 'It has ended');
+    scheduleClippingCheck();
   };
   const setText = (key: 'headline' | 'subtitle' | 'reveal', value: string) => { config[key] = value; refresh(); };
   const validateText = (key: 'headline' | 'subtitle' | 'reveal', value: string, min: number, max: number) => {
@@ -233,7 +280,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   byId('countdown-time').addEventListener('change', scheduleFromInputs);
   byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
   byId('preview-zero').addEventListener('change', refresh);
-  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); } };
+  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : clippingPending ? `${success.replace(/\.$/, '')}, but wait for the clipping check before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(sceneUrl(config), 'Scene URL copied.'));
   byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'));
 
@@ -248,7 +295,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   layout.append(controls, previewPanel);
   app.append(layout);
   sync(); refresh();
-  return { destroy: () => scene?.stop(), applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
+  return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app');

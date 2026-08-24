@@ -276,4 +276,34 @@ describe('scene editor', () => {
     expect((app.querySelector('#scene-url') as HTMLInputElement).value).toContain('rd=2');
     editor.destroy();
   });
+  it('waits for fonts and settled 1080p layout before warning about named scene clipping and preserving copy', async () => {
+    let releaseFonts!: () => void;
+    const fontsReady = new Promise<void>((resolve) => { releaseFonts = resolve; });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: fontsReady } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-scene-measurement]')) return rect(0, 0, 1920, 1080);
+      if (this.matches('[data-scene-measurement] .scene-headline')) return this.textContent?.startsWith('A') ? rect(80, 100, 2100, 300) : rect(80, 100, 1700, 300);
+      return rect(100, 100, 800, 500);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    const writeText = vi.fn().mockResolvedValue(undefined); Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initSceneEditor(app);
+    editor.applyConfig({ ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), headline: 'A'.repeat(48) });
+
+    expect(app.querySelector('#scene-clipping-warning')?.textContent).toBe('');
+    releaseFonts();
+    await vi.waitFor(() => expect(app.querySelector('#scene-clipping-warning')?.textContent).toContain('Headline'));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    const url = (app.querySelector('#scene-url') as HTMLInputElement).value;
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(url));
+    expect(app.querySelector('#copy-status')?.textContent).toContain('copied, but fix the clipping warning');
+
+    editor.applyConfig(cloneSceneConfig(DEFAULT_SCENE_CONFIG));
+    await vi.waitFor(() => expect(app.querySelector('#scene-clipping-warning')?.textContent).toBe(''));
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
 });
