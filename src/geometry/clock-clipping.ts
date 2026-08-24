@@ -46,6 +46,7 @@ export function textInkHorizontalBounds(
 }
 
 const candidateCache = new Map<string, string[]>();
+const MAX_CANDIDATE_CACHE_ENTRIES = 32;
 
 export function clockTextCandidates(config: ClockConfig, lineIndex: number): string[] {
   const line = config.lines[lineIndex]!;
@@ -73,7 +74,10 @@ export function clockTextCandidates(config: ClockConfig, lineIndex: number): str
       if (display.kind !== 'clock') values.add(display.text);
     }
   }
-  const result = [...values]; candidateCache.set(cacheKey, result); return result;
+  const result = [...values];
+  if (candidateCache.size >= MAX_CANDIDATE_CACHE_ENTRIES) candidateCache.delete(candidateCache.keys().next().value!);
+  candidateCache.set(cacheKey, result);
+  return result;
 }
 
 export function widestClockText(node: HTMLElement, candidates: string[]): string {
@@ -86,7 +90,13 @@ export function widestClockText(node: HTMLElement, candidates: string[]): string
   if (context) {
     const style = getComputedStyle(node);
     context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    return candidates.reduce((widest, candidate) => context!.measureText(transform(candidate)).width > context!.measureText(transform(widest)).width ? candidate : widest, candidates[0] ?? '');
+    let widest = candidates[0] ?? '';
+    let widestWidth = context.measureText(transform(widest)).width;
+    for (const candidate of candidates.slice(1)) {
+      const width = context.measureText(transform(candidate)).width;
+      if (width > widestWidth) { widest = candidate; widestWidth = width; }
+    }
+    return widest;
   }
   return candidates.reduce((widest, candidate) => transform(candidate).length > transform(widest).length ? candidate : widest, candidates[0] ?? '');
 }
@@ -94,7 +104,10 @@ export function widestClockText(node: HTMLElement, candidates: string[]): string
 export function applyWidestClockSamples(root: HTMLElement, config: ClockConfig): void {
   const nodes = Array.from(root.querySelectorAll<HTMLElement>('.clock-line'));
   const activeLines = config.lines.map((line, index) => ({ line, index })).filter(({ line }) => line.enabled);
-  nodes.forEach((node, renderedIndex) => { node.textContent = widestClockText(node, clockTextCandidates(config, activeLines[renderedIndex]!.index)); });
+  nodes.forEach((node, renderedIndex) => {
+    const candidates = clockTextCandidates(config, activeLines[renderedIndex]!.index);
+    node.textContent = widestClockText(node, [node.textContent ?? '', ...candidates]);
+  });
 }
 
 export function clockClippingIssues(

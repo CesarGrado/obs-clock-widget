@@ -211,7 +211,7 @@ test('does not warn from an unreachable clock literal during countdown overtime'
 
   const runtime = await context.newPage(); await runtime.setViewportSize({ width: 800, height: 240 });
   await runtime.goto(await page.locator('#obs-url').inputValue()); await runtime.evaluate(() => document.fonts.ready);
-  expect(await runtime.locator('.clock-line').textContent()).toMatch(/^00:0\d:\d{2}$/);
+  expect(await runtime.locator('.clock-line').textContent()).toMatch(/^00:(?:0\d|10):\d{2}$/);
   expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeLessThan(800);
   await runtime.close();
 });
