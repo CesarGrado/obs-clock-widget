@@ -68,16 +68,21 @@ describe('scene editor', () => {
     expect(previewRoot.querySelector('.scene-reveal')?.classList.contains('scene-shown')).toBe(false);
     editor.destroy();
   });
-  it('changes a headline font and clamps weight to the font registry', () => {
+  it('labels every weight option and keeps the selected label synchronized after font clamping', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);
+    const weightSelects = [...app.querySelectorAll<HTMLSelectElement>('[id$="-weight"]')];
+    expect(weightSelects).toHaveLength(4);
+    expect(weightSelects.flatMap((select) => [...select.options].map((item) => item.textContent))).not.toContain('');
+
     const font = app.querySelector<HTMLSelectElement>('#headline-font')!;
     font.value = 'bebas-neue'; font.dispatchEvent(new Event('change', { bubbles: true }));
     const weight = app.querySelector<HTMLSelectElement>('#headline-weight')!;
-    expect([...weight.options].map((o) => o.value)).toEqual(['400']);
-    expect(weight.value).toBe('400');
+    expect([...weight.options].map((item) => [item.value, item.textContent])).toEqual([['400', '400 Regular']]);
+    expect(weight.selectedOptions[0]?.textContent).toBe('400 Regular');
     const url = (app.querySelector('#scene-url') as HTMLInputElement).value;
     expect(url).toContain('hf=bebas-neue');
+    expect(url).toContain('hw=400');
     editor.destroy();
   });
   it('shows a timezone label and wall-time date fields for the current target', () => {

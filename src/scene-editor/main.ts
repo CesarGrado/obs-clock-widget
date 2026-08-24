@@ -21,7 +21,9 @@ const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) 
 const fontSelect = (id: string) => { const node = element('select', { id }); FONT_CATEGORIES.forEach((category) => { const group = element('optgroup', { label: category }); FONTS.filter((font) => font.category === category).forEach((font) => group.append(option(font.id, font.label))); node.append(group); }); return node; };
 const numberInput = (id: string, min: number, max: number) => element('input', { id, type: 'number', min: String(min), max: String(max), required: '' });
 const colorInput = (id: string) => element('input', { id, type: 'color' });
-const weightSelect = (id: string, font: string) => { const node = element('select', { id }); fontById(font)!.weights.forEach((w) => node.append(option(String(w)))); return node; };
+const WEIGHT_LABELS: Record<number, string> = { 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold' };
+const weightOption = (weight: number) => option(String(weight), `${weight} ${WEIGHT_LABELS[weight] ?? 'Weight'}`);
+const weightSelect = (id: string, font: string) => { const node = element('select', { id }); fontById(font)!.weights.forEach((weight) => node.append(weightOption(weight))); return node; };
 
 const THEME_LABELS: Record<SceneConfig['theme'], string> = {
   'dark-gradient': 'Dark Gradient', 'puzzlr-purple': 'Puzzlr Purple', 'neon-blue': 'Neon Blue', sunset: 'Sunset', 'minimal-black': 'Minimal Black',
@@ -98,7 +100,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     for (const key of ['headline', 'subtitle', 'number', 'reveal'] as const) {
       byId<HTMLSelectElement>(`${key}-font`).value = config[`${key}Font`];
       byId<HTMLInputElement>(`${key}-size`).value = String(config[`${key}Size`]);
-      byId<HTMLSelectElement>(`${key}-weight`).replaceChildren(...config[`${key}Font`] ? fontById(config[`${key}Font`])!.weights.map((w) => element('option', { value: String(w) })) : []);
+      byId<HTMLSelectElement>(`${key}-weight`).replaceChildren(...config[`${key}Font`] ? fontById(config[`${key}Font`])!.weights.map(weightOption) : []);
       byId<HTMLSelectElement>(`${key}-weight`).value = String(config[`${key}Weight`]);
       byId<HTMLInputElement>(`${key}-color`).value = config[`${key}Color`];
     }
@@ -148,7 +150,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
       config[`${key}Font`] = font;
       config[`${key}Weight`] = clampWeight(font, config[`${key}Weight`]);
       const weightSelect = byId<HTMLSelectElement>(`${key}-weight`);
-      weightSelect.replaceChildren(...fontById(font)!.weights.map((w) => element('option', { value: String(w) })));
+      weightSelect.replaceChildren(...fontById(font)!.weights.map(weightOption));
       weightSelect.value = String(config[`${key}Weight`]);
       refresh();
     });
