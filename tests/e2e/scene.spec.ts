@@ -99,6 +99,37 @@ test('scene runtime reveals at zero and respects theme and reduced-motion stylin
   await expect(page.locator('.scene-panel')).toHaveClass(/scene-hidden/);
 });
 
+test('scene typography groups stay full-width without unrelated label or control intersections', async ({ page }) => {
+  test.setTimeout(90_000);
+  for (const zoom of [1, 2]) {
+    await page.goto('/scene-editor/');
+    await page.evaluate((factor) => { document.documentElement.style.zoom = String(factor); }, zoom);
+    for (const width of [320, 768, 900, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      const geometry = await page.locator('fieldset').filter({ has: page.locator('legend', { hasText: 'Typography' }) }).evaluate((fieldset) => {
+        const fieldsetBox = fieldset.getBoundingClientRect();
+        const rows = [...fieldset.querySelectorAll<HTMLElement>('.type-row')];
+        const items = [...fieldset.querySelectorAll<HTMLElement>('.type-row label, .type-row input, .type-row select')];
+        const boxes = items.map((item) => ({ id: item.id || item.getAttribute('for') || item.textContent || item.tagName, box: item.getBoundingClientRect() }));
+        const intersections: string[] = [];
+        for (let left = 0; left < boxes.length; left += 1) for (let right = left + 1; right < boxes.length; right += 1) {
+          const a = boxes[left]!; const b = boxes[right]!;
+          if (Math.min(a.box.right, b.box.right) - Math.max(a.box.left, b.box.left) > 0.5
+            && Math.min(a.box.bottom, b.box.bottom) - Math.max(a.box.top, b.box.top) > 0.5) intersections.push(`${a.id}/${b.id}`);
+        }
+        return {
+          intersections,
+          rowsFullWidth: rows.every((row) => row.getBoundingClientRect().width / fieldsetBox.width >= 0.7),
+          controlsUnclipped: [...fieldset.querySelectorAll<HTMLElement>('input, select')].every((control) => {
+            const box = control.getBoundingClientRect(); return box.left >= fieldsetBox.left && box.right <= fieldsetBox.right;
+          }),
+        };
+      });
+      expect(geometry, `width ${width} at ${zoom * 100}% zoom`).toEqual({ intersections: [], rowsFullWidth: true, controlsUnclipped: true });
+    }
+  }
+});
+
 test('scene builder is accessible and overflow-free at 320px', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 900 });
   await page.goto('/scene-editor/');

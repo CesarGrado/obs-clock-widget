@@ -17,7 +17,10 @@
 .motion-card.active{border-color:#53e0c1}
 .motion-card input{margin-right:.4rem}
 .motion-card:focus-within{border-color:#53e0c1;box-shadow:0 0 0 2px #53e0c1}
-.type-row{display:grid;grid-template-columns:2fr 5rem 6rem 4rem;gap:.5rem;align-items:end;padding:.5rem 0;border-bottom:1px solid #1c2135}
+.type-row{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,2fr) minmax(7rem,1fr);gap:.65rem .75rem;align-items:end;padding:.75rem;border:1px solid #292e42;border-radius:10px;background:#0d1120;min-width:0}
+.type-row h3{grid-column:1/-1;margin:0;color:#fff;font-size:1rem}
+.type-field{display:grid;gap:.3rem;min-width:0}
+.type-field input,.type-field select{box-sizing:border-box;width:100%;min-width:0}
 .type-row:last-child{border-bottom:none}
 .quick-buttons{display:flex;gap:.5rem;flex-wrap:wrap;margin:.6rem 0}
 .quick-button{padding:.5rem .9rem;border-radius:8px;border:1px solid #292e42;background:#0d1120;color:#dbe1f5;cursor:pointer;font-weight:600}
@@ -29,3 +32,4 @@
 .error{color:#ff8080;min-height:1.2em;margin:.3rem 0}
 .hint{color:#8b93ad;min-height:1.2em}
 @media(max-width:899px){.type-row{grid-template-columns:1fr 1fr}.schedule-row{grid-template-columns:1fr}}
+@media(max-width:479px){.type-row{grid-template-columns:1fr}}

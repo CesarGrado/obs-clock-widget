@@ -15,6 +15,7 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<st
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
 };
 const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
+const labeledField = (parent: HTMLElement, label: string, control: HTMLElement) => { const field = element('div', { class: 'type-field' }); labeled(field, label, control); parent.append(field); };
 const option = (value: string, label = value) => element('option', { value }, label);
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -48,11 +49,13 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     app.append(form);
     const typeStyles = element('fieldset'); typeStyles.append(element('legend', {}, 'Typography'));
     for (const [key, label] of [['headline', 'Headline'], ['subtitle', 'Subtitle'], ['number', 'Countdown'], ['reveal', 'Zero message']] as const) {
-      const row = element('div', { class: 'type-row' });
-      labeled(row, `${label} font`, fontSelect(`${key}-font`));
-      labeled(row, 'Size', numberInput(`${key}-size`, 10, 240));
-      labeled(row, 'Weight', weightSelect(`${key}-weight`, DEFAULT_SCENE_CONFIG[`${key}Font`]));
-      labeled(row, 'Color', colorInput(`${key}-color`));
+      const headingId = `${key}-typography-heading`;
+      const row = element('div', { class: 'type-row', role: 'group', 'aria-labelledby': headingId });
+      row.append(element('h3', { id: headingId }, label));
+      labeledField(row, `${label} font`, fontSelect(`${key}-font`));
+      labeledField(row, `${label} size (px)`, numberInput(`${key}-size`, 10, 240));
+      labeledField(row, `${label} weight`, weightSelect(`${key}-weight`, DEFAULT_SCENE_CONFIG[`${key}Font`]));
+      labeledField(row, `${label} color`, colorInput(`${key}-color`));
       typeStyles.append(row);
     }
     app.append(typeStyles);
