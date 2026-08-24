@@ -641,14 +641,19 @@ describe('clock editor', () => {
   it('copies setup text with the selected OBS Browser Source size', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this.matches('[data-clock-measurement]') ? [0, 0, 800, 240] : this.matches('[data-clock-measurement] .clock-line:first-child') ? [40, 30, 500, 100] : [40, 120, 500, 180];
+      const [left, top, right, bottom] = box as [number, number, number, number]; return { left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) };
+    });
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const size = app.querySelector<HTMLSelectElement>('#obs-size')!;
     expect(Array.from(size.options).map(({ value }) => value)).toEqual(['1920 × 300', '800 × 240']);
     size.value = '800 × 240'; size.dispatchEvent(new Event('change', { bubbles: true }));
+    await vi.waitFor(() => expect(document.querySelector('[data-clock-measurement]')).toBeNull());
     (app.querySelector('#copy-setup') as HTMLButtonElement).click();
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Size: 800 × 240')));
     expect(app.querySelector('#copy-status')?.textContent).toBe('Setup text copied.');
-    editor.destroy();
+    editor.destroy(); bounds.mockRestore();
   });
 
   it('waits for fonts and settled layout before warning about named line clipping at the selected OBS size', async () => {
@@ -676,6 +681,29 @@ describe('clock editor', () => {
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('/v1/clock/');
 
     editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
+
+  it('measures a wider future localized date instead of only the current clock text', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-08-24T12:00:00Z'));
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-clock-measurement]')) return rect(0, 0, 800, 240);
+      if (this.matches('[data-clock-measurement] .clock-line:nth-child(2)')) return this.textContent?.includes('September') ? rect(0, 100, 900, 180) : rect(20, 100, 500, 180);
+      return rect(20, 20, 500, 90);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const size = app.querySelector<HTMLSelectElement>('#obs-size')!; size.value = '800 × 240'; size.dispatchEvent(new Event('change', { bubbles: true }));
+    const format = app.querySelector<HTMLInputElement>('#line2-format')!; format.value = 'dddd, MMMM D, YYYY'; format.dispatchEvent(new Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => expect(app.querySelector('#clipping-warning')?.textContent).toContain('Line 2'));
+    expect(app.querySelector('#preview-root .clock-line:nth-child(2)')?.textContent).not.toContain('September');
+
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore(); vi.useRealTimers();
     Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   });
 
@@ -717,7 +745,13 @@ describe('clock editor', () => {
   });
 
   it('reports clipboard success', async () => {
-    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
-    (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const box = this.matches('[data-clock-measurement]') ? [0, 0, 1920, 300] : this.matches('[data-clock-measurement] .clock-line:first-child') ? [40, 30, 500, 100] : [40, 120, 500, 180];
+      const [left, top, right, bottom] = box as [number, number, number, number]; return { left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}) };
+    });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    await vi.waitFor(() => expect(document.querySelector('[data-clock-measurement]')).toBeNull());
+    (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy(); bounds.mockRestore();
   });
 });

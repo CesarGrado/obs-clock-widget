@@ -13,7 +13,7 @@ import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant } from './tz';
-import { clockClippingIssues } from '../geometry/clock-clipping';
+import { applyWidestClockSamples, clockClippingIssues } from '../geometry/clock-clipping';
 import type { ClippingIssue } from '../geometry/clipping';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
@@ -204,6 +204,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     document.body.append(measurement); measurementRoot = measurement;
     void afterSettledLayout(revision).then((settled) => {
       if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
+      applyWidestClockSamples(measurement, config);
       clippingIssues = clockClippingIssues(measurement, config, viewport);
       clippingPending = false;
       byId('clipping-warning').textContent = clippingMessage(clippingIssues);

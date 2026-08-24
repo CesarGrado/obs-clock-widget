@@ -143,6 +143,29 @@ test('warns when a severe 62-character clock line clips despite absent runtime s
   await expect(warning).toHaveText('');
 });
 
+test('warns for the widest localized future date even while the current runtime text fits', async ({ page, context }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('1920 × 300');
+  await page.locator('#line1-enabled').uncheck();
+  await page.locator('#timezone').fill('UTC'); await page.locator('#timezone').press('Enter');
+  await page.locator('#locale').selectOption('en-US');
+  await page.locator('#line2-format').fill('dddd, MMMM D, YYYY');
+  await page.locator('#stroke').fill('0'); await page.locator('#shadow').fill('0');
+  let warningSize: number | undefined;
+  for (let size = 80; size <= 240; size += 5) {
+    await page.locator('#line2-size').fill(String(size));
+    await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+    if ((await page.locator('#clipping-warning').textContent())?.includes('Line 2')) { warningSize = size; break; }
+  }
+  expect(warningSize).toBeDefined();
+  await expect(page.locator('#clipping-warning')).toContainText('Line 2');
+
+  const runtime = await context.newPage(); await runtime.setViewportSize({ width: 1920, height: 300 });
+  await runtime.goto(await page.locator('#obs-url').inputValue()); await runtime.evaluate(() => document.fonts.ready);
+  const box = await runtime.locator('.clock-line').boundingBox(); expect(box!.width).toBeLessThanOrEqual(1920);
+  await runtime.close();
+});
+
 test('undoes an accidental reset and clearly marks the unavailable action', async ({ page }) => {
   await page.goto('/editor/');
   const format = page.locator('#line1-format'); const undo = page.getByRole('button', { name: 'Undo reset' });
