@@ -46,6 +46,36 @@ describe('scene editor', () => {
     expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toContain('script');
     editor.destroy();
   });
+  it('surfaces each typography size boundary without changing rendered or exported state', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headlineSize = app.querySelector<HTMLInputElement>('#headline-size')!;
+    const numberSize = app.querySelector<HTMLInputElement>('#number-size')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+    const beforeHeadlineSize = (app.querySelector('.scene-headline') as HTMLElement).style.fontSize;
+    const beforeNumberSize = (app.querySelector('.scene-number') as HTMLElement).style.fontSize;
+
+    headlineSize.value = '9'; headlineSize.dispatchEvent(new Event('input', { bubbles: true }));
+    numberSize.value = '999'; numberSize.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(headlineSize.getAttribute('aria-describedby')).toBe('headline-size-error');
+    expect(numberSize.getAttribute('aria-describedby')).toBe('number-size-error');
+    expect(headlineSize.getAttribute('aria-invalid')).toBe('true');
+    expect(numberSize.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#headline-size-error')?.textContent).toContain('10');
+    expect(app.querySelector('#number-size-error')?.textContent).toContain('240');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+    expect((app.querySelector('.scene-headline') as HTMLElement).style.fontSize).toBe(beforeHeadlineSize);
+    expect((app.querySelector('.scene-number') as HTMLElement).style.fontSize).toBe(beforeNumberSize);
+
+    headlineSize.value = '10'; headlineSize.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(headlineSize.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#headline-size-error')?.textContent).toBe('');
+    expect(numberSize.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toContain('hs=10');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toContain('ns=999');
+    editor.destroy();
+  });
   it('quick durations produce absolute targets and the URL stays canonical', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement;

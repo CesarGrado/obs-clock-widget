@@ -15,12 +15,12 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<st
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
 };
 const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
-const labeledField = (parent: HTMLElement, label: string, control: HTMLElement) => { const field = element('div', { class: 'type-field' }); labeled(field, label, control); parent.append(field); };
+const labeledField = (parent: HTMLElement, label: string, control: HTMLElement) => { const field = element('div', { class: 'type-field' }); labeled(field, label, control); parent.append(field); return field; };
 const option = (value: string, label = value) => element('option', { value }, label);
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const fontSelect = (id: string) => { const node = element('select', { id }); FONT_CATEGORIES.forEach((category) => { const group = element('optgroup', { label: category }); FONTS.filter((font) => font.category === category).forEach((font) => group.append(option(font.id, font.label))); node.append(group); }); return node; };
-const numberInput = (id: string, min: number, max: number) => element('input', { id, type: 'number', min: String(min), max: String(max), required: '' });
+const numberInput = (id: string, min: number, max: number) => element('input', { id, type: 'number', min: String(min), max: String(max), required: '', 'aria-describedby': `${id}-error` });
 const colorInput = (id: string) => element('input', { id, type: 'color' });
 const WEIGHT_LABELS: Record<number, string> = { 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold' };
 const weightOption = (weight: number) => option(String(weight), `${weight} ${WEIGHT_LABELS[weight] ?? 'Weight'}`);
@@ -55,7 +55,8 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
       const row = element('div', { class: 'type-row', role: 'group', 'aria-labelledby': headingId });
       row.append(element('h3', { id: headingId }, label));
       labeledField(row, `${label} font`, fontSelect(`${key}-font`));
-      labeledField(row, `${label} size (px)`, numberInput(`${key}-size`, 10, 240));
+      const sizeField = labeledField(row, `${label} size (px)`, numberInput(`${key}-size`, 10, 240));
+      sizeField.append(element('p', { id: `${key}-size-error`, class: 'error', role: 'alert' }));
       labeledField(row, `${label} weight`, weightSelect(`${key}-weight`, DEFAULT_SCENE_CONFIG[`${key}Font`]));
       labeledField(row, `${label} color`, colorInput(`${key}-color`));
       typeStyles.append(row);
@@ -159,7 +160,13 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
       weightSelect.value = String(config[`${key}Weight`]);
       refresh();
     });
-    byId(`${key}-size`).addEventListener('input', (event) => { const size = Number((event.target as HTMLInputElement).value); if (Number.isFinite(size) && size >= 10 && size <= 240) { config[`${key}Size`] = size; refresh(); } });
+    byId(`${key}-size`).addEventListener('input', (event) => {
+      const node = event.target as HTMLInputElement; const size = Number(node.value); const error = byId(`${key}-size-error`);
+      if (!node.checkValidity() || !Number.isFinite(size) || size < 10 || size > 240) {
+        node.setAttribute('aria-invalid', 'true'); error.textContent = 'Enter a whole-number size from 10 to 240 pixels.'; return;
+      }
+      node.removeAttribute('aria-invalid'); error.textContent = ''; config[`${key}Size`] = size; refresh();
+    });
     byId(`${key}-weight`).addEventListener('change', (event) => { config[`${key}Weight`] = Number((event.target as HTMLSelectElement).value) as SceneConfig['headlineWeight']; refresh(); });
     byId(`${key}-color`).addEventListener('input', (event) => { config[`${key}Color`] = (event.target as HTMLInputElement).value; refresh(); });
   }
