@@ -227,6 +227,26 @@ describe('scene editor', () => {
     expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toBe(beforeUrl);
     editor.destroy(); vi.useRealTimers();
   });
+  it('focuses the first invalid schedule field when copy commits the scene', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    (app.querySelector('#schedule-scene') as HTMLButtonElement).click();
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!;
+    const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = ''; time.value = '';
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(date);
+    expect(writeText).not.toHaveBeenCalled();
+
+    date.value = '2026-08-25'; time.value = '';
+    (app.querySelector('#copy-setup') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(time);
+    expect(app.querySelector('#copy-status')?.textContent).toContain('Fix the highlighted schedule fields');
+    expect(writeText).not.toHaveBeenCalled();
+    editor.destroy();
+  });
   it('schedules a normal date/time as a DST-safe absolute instant', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement;
