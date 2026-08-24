@@ -29,6 +29,8 @@ const weightSelect = (id: string, font: string) => { const node = element('selec
 const THEME_LABELS: Record<SceneConfig['theme'], string> = {
   'dark-gradient': 'Dark Gradient', 'puzzlr-purple': 'Puzzlr Purple', 'neon-blue': 'Neon Blue', sunset: 'Sunset', 'minimal-black': 'Minimal Black',
 };
+const UNSCHEDULED_TARGET = DEFAULT_SCENE_CONFIG.countdownTarget;
+const isUnscheduledTarget = (target: string) => target === UNSCHEDULED_TARGET || Date.parse(target) - Date.now() > 99 * 86_400_000;
 
 export type ScenePresets = Record<string, SceneConfig>;
 const withChanges = (changes: Partial<SceneConfig>): SceneConfig => ({ ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), ...changes });
@@ -78,6 +80,11 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     themesField.append(motionCards, element('p', { class: 'hint' }, 'Motion pauses automatically for viewers who prefer reduced motion.'));
     app.append(themesField);
     const countdown = element('fieldset', { id: 'countdown-setup' }); countdown.append(element('legend', {}, 'Countdown'));
+    const scheduleActions = element('div', { class: 'quick-buttons', role: 'group', 'aria-label': 'Scene scheduling' });
+    scheduleActions.append(
+      element('button', { id: 'schedule-scene', type: 'button' }, 'Schedule scene'),
+      element('button', { id: 'clear-schedule', type: 'button', class: 'secondary' }, 'Clear schedule'),
+    );
     const quick = element('div', { class: 'quick-buttons', role: 'group', 'aria-label': 'Quick countdown durations' });
     for (const minutes of [5, 10, 15, 30, 60]) quick.append(element('button', { id: `quick-${minutes}`, type: 'button', class: 'quick-button', 'data-minutes': String(minutes) }, `${minutes} min`));
     const schedule = element('div', { class: 'schedule-row' });
@@ -90,9 +97,9 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const tz = element('span', { id: 'countdown-timezone', class: 'hint' }); tz.textContent = timezoneLabel();
     schedule.append(dateField, timeField, tz);
     const delay = element('select', { id: 'reveal-delay', 'aria-label': 'Delay before the zero message appears' });
-    for (const minutes of [0, 1, 2, 3]) delay.append(option(String(minutes), minutes === 0 ? 'At zero (after 5s hold)' : `${minutes} min after zero`));
-    labeled(countdown, 'Show zero message', delay);
-    countdown.append(quick, schedule, element('p', { id: 'countdown-error', class: 'error', role: 'alert' }), element('p', { id: 'resolved-target', 'aria-live': 'polite', class: 'hint' }));
+    for (const minutes of [0, 1, 2, 3]) delay.append(option(String(minutes), minutes === 0 ? 'After the 5-second hold' : `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} after the 5-second hold`));
+    labeled(countdown, 'Zero-message timing', delay);
+    countdown.append(scheduleActions, quick, schedule, element('p', { id: 'countdown-error', class: 'error', role: 'alert' }), element('p', { id: 'resolved-target', 'aria-live': 'polite', class: 'hint' }));
     app.append(countdown);
     const actions = element('fieldset'); actions.append(element('legend', {}, 'Preview & OBS'));
     actions.append(element('label', { for: 'preview-zero' }, 'Preview zero state'));
@@ -103,6 +110,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   build();
   let config = location.hash ? decodeSceneConfig(location.hash) : cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+  let scheduleActive = !isUnscheduledTarget(config.countdownTarget);
   let scene: ReturnType<typeof renderScene> | undefined;
 
   const sync = () => {
@@ -120,11 +128,16 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     syncCountdownInputs();
   };
   const syncCountdownInputs = () => {
+    const date = byId<HTMLInputElement>('countdown-date'); const time = byId<HTMLInputElement>('countdown-time');
+    date.disabled = !scheduleActive; time.disabled = !scheduleActive;
+    byId<HTMLButtonElement>('schedule-scene').disabled = scheduleActive;
+    byId<HTMLButtonElement>('clear-schedule').disabled = !scheduleActive;
+    if (!scheduleActive || isUnscheduledTarget(config.countdownTarget)) { date.value = ''; time.value = ''; byId<HTMLSelectElement>('reveal-delay').value = String(config.revealDelay); return; }
     const end = new Date(config.countdownTarget); if (Number.isNaN(end.getTime())) return;
     // Display the target in the device timezone (the one scheduling interprets inputs in).
-    const { date, time } = instantToWallFields(end);
-    byId<HTMLInputElement>('countdown-date').value = date;
-    byId<HTMLInputElement>('countdown-time').value = time;
+    const wall = instantToWallFields(end);
+    date.value = wall.date;
+    time.value = wall.time;
     byId<HTMLSelectElement>('reveal-delay').value = String(config.revealDelay);
   };
   const refresh = () => {
@@ -136,7 +149,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     history.replaceState(null, '', `#${encodeSceneConfig(config)}`);
     const end = new Date(config.countdownTarget);
     const totalSeconds = Math.round((end.getTime() - Date.now()) / 1000);
-    const unscheduled = config.countdownTarget === '2099-12-31T23:59:00Z' || totalSeconds > 99 * 86_400;
+    const unscheduled = isUnscheduledTarget(config.countdownTarget);
     byId('resolved-target').textContent = unscheduled ? 'Not scheduled yet — pick a time or use a quick duration.' : (totalSeconds > 0 ? `Ends in ${Math.max(1, Math.round(totalSeconds / 60))} minutes` : 'It has ended');
   };
   const setText = (key: 'headline' | 'subtitle' | 'reveal', value: string) => { config[key] = value; refresh(); };
@@ -190,8 +203,15 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   app.querySelectorAll<HTMLButtonElement>('.quick-button').forEach((button) => button.addEventListener('click', () => {
     const minutes = Number(button.dataset.minutes);
     config.countdownTarget = new Date(Date.now() + minutes * 60_000).toISOString().replace('.000Z', 'Z');
+    scheduleActive = true;
     syncCountdownInputs(); clearScheduleErrors(); refresh();
   }));
+  byId('schedule-scene').addEventListener('click', () => {
+    scheduleActive = true; syncCountdownInputs(); clearScheduleErrors(); byId<HTMLInputElement>('countdown-date').focus();
+  });
+  byId('clear-schedule').addEventListener('click', () => {
+    config.countdownTarget = UNSCHEDULED_TARGET; scheduleActive = false; syncCountdownInputs(); clearScheduleErrors(); refresh();
+  });
   const scheduleFromInputs = () => {
     const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
     clearScheduleErrors();
@@ -228,7 +248,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   layout.append(controls, previewPanel);
   app.append(layout);
   sync(); refresh();
-  return { destroy: () => scene?.stop(), applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); sync(); refresh(); } };
+  return { destroy: () => scene?.stop(), applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app');

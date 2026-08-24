@@ -17,6 +17,52 @@ describe('scene editor', () => {
     expect(url).toContain('/v1/scene/#v=1');
     editor.destroy();
   });
+  it('starts unscheduled and keeps schedule, clear, quick duration, and zero-message timing synchronized', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!;
+    const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    const schedule = app.querySelector<HTMLButtonElement>('#schedule-scene')!;
+    const clear = app.querySelector<HTMLButtonElement>('#clear-schedule')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+
+    expect(date.value).toBe(''); expect(time.value).toBe('');
+    expect(date.disabled).toBe(true); expect(time.disabled).toBe(true);
+    expect(schedule.textContent).toBe('Schedule scene'); expect(schedule.disabled).toBe(false);
+    expect(clear.textContent).toBe('Clear schedule'); expect(clear.disabled).toBe(true);
+    expect(app.querySelector('#resolved-target')?.textContent).toContain('Not scheduled');
+    expect(document.body.textContent).not.toContain('2099');
+    const timing = app.querySelector<HTMLSelectElement>('#reveal-delay')!;
+    expect(app.querySelector(`label[for="${timing.id}"]`)?.textContent).toBe('Zero-message timing');
+    expect([...timing.options].map((item) => item.textContent)).toEqual([
+      'After the 5-second hold',
+      '1 minute after the 5-second hold',
+      '2 minutes after the 5-second hold',
+      '3 minutes after the 5-second hold',
+    ]);
+
+    schedule.click();
+    expect(date.disabled).toBe(false); expect(time.disabled).toBe(false);
+    expect(schedule.disabled).toBe(true); expect(clear.disabled).toBe(false);
+    expect(date.value).toBe(''); expect(time.value).toBe('');
+
+    date.value = '2026-08-22'; time.value = '12:30';
+    time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toContain('ct=2026-08-22T12%3A30%3A00Z');
+
+    clear.click();
+    expect(date.value).toBe(''); expect(time.value).toBe('');
+    expect(date.disabled).toBe(true); expect(time.disabled).toBe(true);
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+    expect(document.body.textContent).not.toContain('2099');
+
+    (app.querySelector('#quick-10') as HTMLButtonElement).click();
+    expect(date.disabled).toBe(false); expect(time.disabled).toBe(false);
+    expect(date.value).toBe('2026-08-22'); expect(time.value).toBe('12:10');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toContain('ct=2026-08-22T12%3A10%3A00Z');
+    editor.destroy(); vi.useRealTimers();
+  });
   it('keeps text validation field-specific, persistent, and state-safe until each field recovers', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);
