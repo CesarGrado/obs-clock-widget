@@ -326,4 +326,42 @@ describe('scene editor', () => {
     editor.destroy(); bounds.mockRestore(); raf.mockRestore();
     Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   });
+
+  it.each([
+    ['copy-url', true, 'Scene URL copied, but fix the clipping warning before using this source in OBS.'],
+    ['copy-url', false, 'Scene URL copied.'],
+    ['copy-setup', true, 'Full-screen OBS setup copied, but fix the clipping warning before using this source in OBS.'],
+    ['copy-setup', false, 'Full-screen OBS setup copied.'],
+  ] as const)('reports the copied Scene payload snapshot for %s when clipping starts as %s', async (buttonId, initiallyClipped, expectedStatus) => {
+    let releaseClipboard!: () => void;
+    const writeText = vi.fn((text: string) => { void text; return new Promise<void>((resolve) => { releaseClipboard = resolve; }); });
+    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-scene-measurement]')) return rect(0, 0, 1920, 1080);
+      if (this.matches('[data-scene-measurement] .scene-headline')) return this.textContent?.startsWith('A') ? rect(80, 100, 2100, 300) : rect(80, 100, 1700, 300);
+      return rect(100, 100, 800, 500);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initSceneEditor(app);
+    const setClipped = async (clipped: boolean) => {
+      editor.applyConfig({ ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), headline: clipped ? 'A'.repeat(48) : DEFAULT_SCENE_CONFIG.headline });
+      await vi.waitFor(() => expect(document.querySelector('[data-scene-measurement]')).toBeNull());
+      expect(app.querySelector('#scene-clipping-warning')?.textContent).toContain(clipped ? 'Headline' : '');
+    };
+    await setClipped(initiallyClipped);
+    const copiedUrl = (app.querySelector('#scene-url') as HTMLInputElement).value;
+    (app.querySelector(`#${buttonId}`) as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(String(writeText.mock.calls[0]![0])).toContain(copiedUrl);
+    await setClipped(!initiallyClipped);
+    releaseClipboard();
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe(expectedStatus));
+
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
 });

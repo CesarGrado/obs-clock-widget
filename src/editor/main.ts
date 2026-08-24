@@ -13,6 +13,7 @@ import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant } from './tz';
+import { clippingCopySuccess } from './clipboard';
 import { applyWidestClockSamples, clockClippingIssues } from '../geometry/clock-clipping';
 import type { ClippingIssue } from '../geometry/clipping';
 
@@ -346,7 +347,10 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     config = resetSnapshot; resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
     byId<HTMLButtonElement>('undo-reset').disabled = true; byId('copy-status').textContent = 'Previous settings restored.';
   });
-  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : clippingPending ? `${success.replace(/\.$/, '')}, but wait for the clipping check before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
+  const copy = async (text: string, success: string) => {
+    const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
+    try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); }
+  };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
   sync(); refresh(); return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };

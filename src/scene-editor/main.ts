@@ -10,6 +10,7 @@ import { cloneSceneConfig } from '../config/clone';
 import { renderScene } from '../scene/renderer';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant, instantToWallFields, timezoneLabel } from '../editor/tz';
+import { clippingCopySuccess } from '../editor/clipboard';
 import { sceneClippingIssues } from '../geometry/scene-clipping';
 import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
 
@@ -287,7 +288,10 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
   byId('preview-zero').addEventListener('change', refresh);
-  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : clippingPending ? `${success.replace(/\.$/, '')}, but wait for the clipping check before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); } };
+  const copy = async (text: string, success: string) => {
+    const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
+    try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); }
+  };
   byId('copy-url').addEventListener('click', () => { if (commitSchedule()) void copy(sceneUrl(config), 'Scene URL copied.'); });
   byId('copy-setup').addEventListener('click', () => { if (commitSchedule()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });
 

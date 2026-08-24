@@ -744,6 +744,46 @@ describe('clock editor', () => {
     Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
   });
 
+  it.each([
+    ['copy-url', true, 'OBS URL copied, but fix the clipping warning before using this source in OBS.'],
+    ['copy-url', false, 'OBS URL copied.'],
+    ['copy-setup', true, 'Setup text copied, but fix the clipping warning before using this source in OBS.'],
+    ['copy-setup', false, 'Setup text copied.'],
+  ] as const)('reports the copied Clock payload snapshot for %s when clipping starts as %s', async (buttonId, initiallyClipped, expectedStatus) => {
+    let releaseClipboard!: () => void;
+    const writeText = vi.fn((text: string) => { void text; return new Promise<void>((resolve) => { releaseClipboard = resolve; }); });
+    Object.assign(navigator, { clipboard: { writeText } });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: Promise.resolve() } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-clock-measurement]')) return rect(0, 0, 800, 240);
+      if (this.matches('[data-clock-measurement] .clock-line:first-child')) return this.textContent?.includes('A') ? rect(-20, 0, 980, 260) : rect(20, 20, 300, 100);
+      return rect(20, 110, 300, 180);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    const setClipped = async (clipped: boolean) => {
+      format.value = clipped ? `'${'A'.repeat(62)}'` : 'HH:mm';
+      format.dispatchEvent(new Event('input', { bubbles: true }));
+      await vi.waitFor(() => expect(document.querySelector('[data-clock-measurement]')).toBeNull());
+      expect(app.querySelector('#clipping-warning')?.textContent).toContain(clipped ? 'Line 1' : '');
+    };
+    await setClipped(initiallyClipped);
+    const copiedUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    (app.querySelector(`#${buttonId}`) as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(String(writeText.mock.calls[0]![0])).toContain(copiedUrl);
+    await setClipped(!initiallyClipped);
+    releaseClipboard();
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe(expectedStatus));
+
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
     const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
