@@ -42,10 +42,12 @@ export const SCENE_PRESETS: ScenePresets = {
 export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: SceneConfig) => void } {
   const build = () => {
     const form = element('fieldset'); form.append(element('legend', {}, 'Scene text'));
-    const headline = element('input', { id: 'headline', type: 'text', maxlength: '48' }); labeled(form, 'Headline', headline);
-    const subtitle = element('input', { id: 'subtitle', type: 'text', maxlength: '64' }); labeled(form, 'Subtitle (optional)', subtitle);
-    const reveal = element('input', { id: 'reveal', type: 'text', maxlength: '32' }); labeled(form, 'Message at zero', reveal);
-    form.append(element('p', { id: 'text-error', class: 'error', role: 'alert' }));
+    const headline = element('input', { id: 'headline', type: 'text', maxlength: '48', required: '', 'aria-describedby': 'headline-error' });
+    labeled(form, 'Headline', headline); form.append(element('p', { id: 'headline-error', class: 'error', role: 'alert' }));
+    const subtitle = element('input', { id: 'subtitle', type: 'text', maxlength: '64', 'aria-describedby': 'subtitle-error' });
+    labeled(form, 'Subtitle (optional)', subtitle); form.append(element('p', { id: 'subtitle-error', class: 'error', role: 'alert' }));
+    const reveal = element('input', { id: 'reveal', type: 'text', maxlength: '32', required: '', 'aria-describedby': 'reveal-error' });
+    labeled(form, 'Message at zero', reveal); form.append(element('p', { id: 'reveal-error', class: 'error', role: 'alert' }));
     app.append(form);
     const typeStyles = element('fieldset'); typeStyles.append(element('legend', {}, 'Typography'));
     for (const [key, label] of [['headline', 'Headline'], ['subtitle', 'Subtitle'], ['number', 'Countdown'], ['reveal', 'Zero message']] as const) {
@@ -134,7 +136,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   const setText = (key: 'headline' | 'subtitle' | 'reveal', value: string) => { config[key] = value; refresh(); };
   const validateText = (key: 'headline' | 'subtitle' | 'reveal', value: string, min: number, max: number) => {
-    const error = byId('text-error'); const node = byId<HTMLInputElement>(key);
+    const error = byId(`${key}-error`); const node = byId<HTMLInputElement>(key);
     if (value.length > max) { node.setAttribute('aria-invalid', 'true'); error.textContent = `Keep it under ${max + 1} characters.`; return false; }
     if (key !== 'subtitle' && value.length < min) { node.setAttribute('aria-invalid', 'true'); error.textContent = 'This field is required.'; return false; }
     if (!/^[A-Za-z0-9 !?.,:'"&\-+()/·—–]*$/.test(value)) { node.setAttribute('aria-invalid', 'true'); error.textContent = 'Use letters, numbers, and basic punctuation only.'; return false; }

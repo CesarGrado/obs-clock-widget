@@ -17,18 +17,33 @@ describe('scene editor', () => {
     expect(url).toContain('/v1/scene/#v=1');
     editor.destroy();
   });
-  it('validates headline length and characters with friendly errors', () => {
+  it('keeps text validation field-specific, persistent, and state-safe until each field recovers', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);
     const headline = app.querySelector<HTMLInputElement>('#headline')!;
-    headline.value = 'x'.repeat(60); headline.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(app.querySelector('#text-error')?.textContent).toContain('characters');
+    const reveal = app.querySelector<HTMLInputElement>('#reveal')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+    const beforePreview = app.querySelector('.scene-headline')!.textContent;
+
+    headline.value = ''; headline.dispatchEvent(new Event('input', { bubbles: true }));
+    reveal.value = 'bad <script>'; reveal.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(headline.getAttribute('aria-describedby')).toBe('headline-error');
+    expect(reveal.getAttribute('aria-describedby')).toBe('reveal-error');
     expect(headline.getAttribute('aria-invalid')).toBe('true');
-    headline.value = 'bad <script>'; headline.dispatchEvent(new Event('input', { bubbles: true }));
-    expect(app.querySelector('#text-error')?.textContent).toContain('punctuation');
+    expect(reveal.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#headline-error')?.textContent).toContain('required');
+    expect(app.querySelector('#reveal-error')?.textContent).toContain('punctuation');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+    expect(app.querySelector('.scene-headline')!.textContent).toBe(beforePreview);
+
     headline.value = 'GAME NIGHT'; headline.dispatchEvent(new Event('input', { bubbles: true }));
     expect(headline.getAttribute('aria-invalid')).toBeNull();
-    expect(app.querySelector('#text-error')?.textContent).toBe('');
+    expect(app.querySelector('#headline-error')?.textContent).toBe('');
+    expect(reveal.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#reveal-error')?.textContent).toContain('punctuation');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toContain('h=GAME+NIGHT');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toContain('script');
     editor.destroy();
   });
   it('quick durations produce absolute targets and the URL stays canonical', () => {
