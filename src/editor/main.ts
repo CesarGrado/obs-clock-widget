@@ -13,6 +13,8 @@ import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant } from './tz';
+import { clockClippingIssues } from '../geometry/clock-clipping';
+import type { ClippingIssue } from '../geometry/clipping';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -97,7 +99,7 @@ function buildEditor(app: HTMLElement) {
   importForm.append(element('label', { for: 'existing-obs-url' }, 'Load existing OBS URL or fragment'), existingUrl, element('button', { id: 'load-existing', type: 'submit' }, 'Load'));
   output.append(importForm, element('p', { id: 'import-help', class: 'help' }, 'Paste a generated /v1/clock/ URL, or its fragment beginning with v=1 or #v=1.'), element('p', { id: 'import-status', role: 'status', 'aria-live': 'polite' }));
   const actions = element('div', { class: 'actions' }); actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy OBS URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy setup text'), element('button', { id: 'open-preview', type: 'button' }, 'Open widget preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'), element('button', { id: 'undo-reset', type: 'button', class: 'secondary', disabled: '' }, 'Undo reset'));
-  output.append(actions, element('p', { id: 'copy-status', role: 'status', 'aria-live': 'polite' }), element('p', { id: 'url-warning', class: 'warning' })); panel.append(output);
+  output.append(actions, element('p', { id: 'copy-status', role: 'status', 'aria-live': 'polite' }), element('p', { id: 'url-warning', class: 'warning' }), element('p', { id: 'clipping-warning', class: 'warning', role: 'status', 'aria-live': 'polite' })); panel.append(output);
   const help = element('section', { class: 'instructions' }); help.append(element('h2', {}, 'Add to OBS'), element('ol'));
   const steps = ['Sources → + → Browser; create “Stream Clock”.','Paste the generated URL.','Use 1920 × 300 (or 800 × 240 for compact presets).','Leave custom CSS empty.','Leave “Shutdown source when not visible” and “Refresh browser when scene becomes active” off for uninterrupted operation.']; steps.forEach((step) => help.querySelector('ol')!.append(element('li', {}, step)));
   help.append(element('p', { class: 'privacy' }, 'Anyone with this URL can view its visual settings. Do not enter secrets or personal information. No settings are stored or tracked.')); panel.append(help);
@@ -109,6 +111,7 @@ function buildEditor(app: HTMLElement) {
 
 export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: ClockConfig) => void } {
   buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
+  let clippingIssues: ClippingIssue[] = []; let clippingRevision = 0; let measurementRoot: HTMLElement | undefined; let layoutFrame: number | undefined;
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const weightOptions = (n: number, fontId: string, weight: number) => {
     const control = byId<HTMLSelectElement>(`line${n}-weight`);
@@ -175,9 +178,39 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
       }, 60_000) as unknown as number;
     }, firstDelay) as unknown as number;
   };
+  const selectedViewport = () => {
+    const [width, height] = byId<HTMLSelectElement>('obs-size').value.split('×').map((part) => Number(part.trim()));
+    return { width: width!, height: height! };
+  };
+  const clippingMessage = (issues: ClippingIssue[]) => issues.length === 0 ? '' : `Content is clipped at ${byId<HTMLSelectElement>('obs-size').value}: ${issues.map((issue) => `${issue.label} (${issue.clippedEdges.join(', ')})`).join('; ')}. ${Array.from(new Set(issues.flatMap((issue) => issue.suggestedFixes))).join(' ')}`;
+  const afterSettledLayout = async (revision: number) => {
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+    if (fonts) await fonts.ready;
+    if (revision !== clippingRevision) return false;
+    await new Promise<void>((resolve) => { layoutFrame = requestAnimationFrame(() => { layoutFrame = requestAnimationFrame(() => { layoutFrame = undefined; resolve(); }); }); });
+    return revision === clippingRevision;
+  };
+  const scheduleClippingCheck = () => {
+    const revision = ++clippingRevision;
+    if (layoutFrame !== undefined) { cancelAnimationFrame(layoutFrame); layoutFrame = undefined; }
+    measurementRoot?.remove();
+    const viewport = selectedViewport();
+    const source = byId('preview-root');
+    const measurement = source.cloneNode(true) as HTMLElement;
+    measurement.removeAttribute('id'); measurement.dataset.clockMeasurement = '';
+    measurement.setAttribute('aria-hidden', 'true');
+    Object.assign(measurement.style, { position: 'fixed', left: '-10000px', top: '0', width: `${viewport.width}px`, height: `${viewport.height}px`, pointerEvents: 'none', contain: 'strict' });
+    document.body.append(measurement); measurementRoot = measurement;
+    void afterSettledLayout(revision).then((settled) => {
+      if (!settled || revision !== clippingRevision || !measurement.isConnected) return;
+      clippingIssues = clockClippingIssues(measurement, config, viewport);
+      byId('clipping-warning').textContent = clippingMessage(clippingIssues);
+      measurement.remove(); if (measurementRoot === measurement) measurementRoot = undefined;
+    });
+  };
   const refresh = () => {
     clock?.stop(); clock = renderClock(byId('preview-root'), config); const url = widgetUrl(config); byId<HTMLInputElement>('obs-url').value = url; history.replaceState(null, '', `#${url.split('#')[1]}`); byId('url-warning').textContent = url.length >= URL_WARNING_LENGTH ? 'This URL is unusually long; shorten format literals.' : ''; byId('empty-warning').textContent = config.lines.some((line) => line.enabled) ? '' : 'Both lines are disabled; the OBS widget will be fully transparent.';
-    refreshSummary(); scheduleSummary();
+    refreshSummary(); scheduleSummary(); scheduleClippingCheck();
   };
   const timezoneInput = byId<HTMLInputElement>('timezone'); const timezoneOptions = byId('timezone-options'); let activeTimezone = -1; let visibleTimezones: TimezoneId[] = [];
   const setCountdownTarget = (iso: string) => {
@@ -283,6 +316,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
   });
   byId<HTMLSelectElement>('backdrop').addEventListener('change', (event) => { byId('preview-stage').className = `preview-stage ${(event.target as HTMLSelectElement).value}`; });
+  byId<HTMLSelectElement>('obs-size').addEventListener('change', scheduleClippingCheck);
   const importForm = app.querySelector<HTMLFormElement>('.import-existing')!;
   const existingUrl = byId<HTMLInputElement>('existing-obs-url');
   importForm.addEventListener('submit', (event) => {
@@ -309,10 +343,10 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     config = resetSnapshot; resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
     byId<HTMLButtonElement>('undo-reset').disabled = true; byId('copy-status').textContent = 'Previous settings restored.';
   });
-  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
+  const copy = async (text: string, success: string) => { try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = clippingIssues.length ? `${success.replace(/\.$/, '')}, but fix the clipping warning before using this source in OBS.` : success; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); } };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
-  sync(); refresh(); return { destroy: () => { clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
+  sync(); refresh(); return { destroy: () => { clippingRevision += 1; if (layoutFrame !== undefined) cancelAnimationFrame(layoutFrame); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);

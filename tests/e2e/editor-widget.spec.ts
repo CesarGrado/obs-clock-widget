@@ -111,6 +111,38 @@ test('copies setup instructions with the selected compact Browser Source size', 
   expect(copied).toContain('/v1/clock/#v=1');
 });
 
+test('warns when a severe 62-character clock line clips despite absent runtime scrollbars, then clears on recovery', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-size').fill('240');
+  await page.locator('#line1-format').fill(`'${'A'.repeat(62)}'`);
+
+  const warning = page.locator('#clipping-warning');
+  await expect(warning).toContainText('Line 1');
+  await expect(warning).toContainText('shorten its format');
+  const runtimeUrl = await page.locator('#obs-url').inputValue();
+  await page.getByRole('button', { name: 'Copy OBS URL' }).click();
+  await expect(page.locator('#copy-status')).toContainText('copied, but fix the clipping warning');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(runtimeUrl);
+
+  const runtime = await context.newPage();
+  await runtime.setViewportSize({ width: 800, height: 240 });
+  await runtime.goto(runtimeUrl);
+  await runtime.evaluate(() => (document as Document & { fonts: FontFaceSet }).fonts.ready);
+  expect(await runtime.evaluate(() => ({
+    bodyWidth: document.body.scrollWidth, bodyClientWidth: document.body.clientWidth,
+    bodyHeight: document.body.scrollHeight, bodyClientHeight: document.body.clientHeight,
+  }))).toEqual({ bodyWidth: 800, bodyClientWidth: 800, bodyHeight: 240, bodyClientHeight: 240 });
+  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeGreaterThan(800);
+  await runtime.close();
+
+  await page.getByLabel('Preset', { exact: true }).selectOption('Minimal');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+  await expect(warning).toHaveText('');
+});
+
 test('undoes an accidental reset and clearly marks the unavailable action', async ({ page }) => {
   await page.goto('/editor/');
   const format = page.locator('#line1-format'); const undo = page.getByRole('button', { name: 'Undo reset' });

@@ -651,6 +651,34 @@ describe('clock editor', () => {
     editor.destroy();
   });
 
+  it('waits for fonts and settled layout before warning about named line clipping at the selected OBS size', async () => {
+    let releaseFonts!: () => void;
+    const fontsReady = new Promise<void>((resolve) => { releaseFonts = resolve; });
+    Object.defineProperty(document, 'fonts', { configurable: true, value: { ready: fontsReady } });
+    const rect = (left: number, top: number, right: number, bottom: number): DOMRect => ({
+      left, top, right, bottom, width: right - left, height: bottom - top, x: left, y: top, toJSON: () => ({}),
+    });
+    const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.matches('[data-clock-measurement]')) return rect(0, 0, 800, 240);
+      if (this.matches('[data-clock-measurement] .clock-line:first-child')) return rect(20, 20, 980, 180);
+      if (this.matches('[data-clock-measurement] .clock-line:nth-child(2)')) return rect(20, 185, 300, 220);
+      return rect(0, 0, 320, 180);
+    });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { callback(0); return 1; });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const size = app.querySelector<HTMLSelectElement>('#obs-size')!;
+    size.value = '800 × 240'; size.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(app.querySelector('#clipping-warning')?.textContent).toBe('');
+    releaseFonts();
+    await vi.waitFor(() => expect(app.querySelector('#clipping-warning')?.textContent).toContain('Line 1'));
+    expect(app.querySelector('#clipping-warning')?.textContent).toContain('shorten its format');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('/v1/clock/');
+
+    editor.destroy(); bounds.mockRestore(); raf.mockRestore();
+    Object.defineProperty(document, 'fonts', { configurable: true, value: undefined });
+  });
+
   it('reports clipboard success', async () => {
     Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } }); const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     (app.querySelector('#copy-url') as HTMLButtonElement).click(); await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('OBS URL copied.')); editor.destroy();
