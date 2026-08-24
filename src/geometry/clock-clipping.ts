@@ -5,16 +5,43 @@ import {
   collectElementBounds,
   evaluateElementBounds,
   type ClippingIssue,
+  type RenderedBounds,
   type ViewportBounds,
 } from './clipping';
 
 export function clockPaintMargins(stroke: number, shadow: number) {
+  const halfStroke = stroke / 2;
   const shadowOffsetY = shadow > 0 ? Math.max(1, shadow / 3) : 0;
   return {
-    left: stroke + shadow,
-    top: stroke + Math.max(0, shadow - shadowOffsetY),
-    right: stroke + shadow,
-    bottom: stroke + shadow + shadowOffsetY,
+    left: halfStroke + shadow,
+    top: halfStroke + Math.max(0, shadow - shadowOffsetY),
+    right: halfStroke + shadow,
+    bottom: halfStroke + shadow + shadowOffsetY,
+  };
+}
+
+interface HorizontalTextMetrics {
+  width: number;
+  actualBoundingBoxLeft?: number;
+  actualBoundingBoxRight?: number;
+}
+
+export function textInkHorizontalBounds(
+  bounds: RenderedBounds,
+  metrics: HorizontalTextMetrics,
+  align: ClockConfig['align'],
+): RenderedBounds {
+  const { actualBoundingBoxLeft: inkLeft, actualBoundingBoxRight: inkRight } = metrics;
+  if (![metrics.width, inkLeft, inkRight].every((value) => Number.isFinite(value))) return bounds;
+  const originX = align === 'left'
+    ? bounds.left
+    : align === 'center'
+      ? (bounds.left + bounds.right - metrics.width) / 2
+      : bounds.right - metrics.width;
+  return {
+    ...bounds,
+    left: originX - inkLeft!,
+    right: originX + inkRight!,
   };
 }
 
@@ -50,7 +77,8 @@ export function clockTextCandidates(config: ClockConfig, lineIndex: number): str
 }
 
 export function widestClockText(node: HTMLElement, candidates: string[]): string {
-  const transform = (text: string) => node.style.textTransform === 'uppercase' ? text.toLocaleUpperCase() : node.style.textTransform === 'lowercase' ? text.toLocaleLowerCase() : text;
+  const textTransform = getComputedStyle(node).textTransform;
+  const transform = (text: string) => textTransform === 'uppercase' ? text.toLocaleUpperCase() : textTransform === 'lowercase' ? text.toLocaleLowerCase() : text;
   let context: CanvasRenderingContext2D | null = null;
   if (!navigator.userAgent.includes('jsdom')) {
     try { context = document.createElement('canvas').getContext('2d'); } catch { /* unavailable canvas falls back to conservative text length */ }
@@ -93,5 +121,21 @@ export function clockClippingIssues(
       ],
     };
   });
-  return evaluateElementBounds(viewport, collectElementBounds(root, elements));
+  const measured = collectElementBounds(root, elements);
+  let context: CanvasRenderingContext2D | null = null;
+  if (!navigator.userAgent.includes('jsdom')) {
+    try { context = document.createElement('canvas').getContext('2d'); } catch { /* retain conservative DOM bounds */ }
+  }
+  if (context) measured.forEach((element, index) => {
+    const node = nodes[index]!;
+    const style = getComputedStyle(node);
+    context!.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    const text = style.textTransform === 'uppercase'
+      ? (node.textContent ?? '').toLocaleUpperCase()
+      : style.textTransform === 'lowercase'
+        ? (node.textContent ?? '').toLocaleLowerCase()
+        : (node.textContent ?? '');
+    element.bounds = textInkHorizontalBounds(element.bounds, context!.measureText(text), config.align);
+  });
+  return evaluateElementBounds(viewport, measured);
 }

@@ -143,6 +143,19 @@ test('warns when a severe 62-character clock line clips despite absent runtime s
   await expect(warning).toHaveText('');
 });
 
+test('does not warn for fitting right-aligned text with a small stroke', async ({ page }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('1920 × 300');
+  await page.getByLabel('Alignment').selectOption('right');
+  await page.locator('#stroke').fill('1');
+  await page.locator('#shadow').fill('0');
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-size').fill('40');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+
+  await expect(page.locator('#clipping-warning')).toHaveText('');
+});
+
 test('warns for the widest localized future date even while the current runtime text fits', async ({ page, context }) => {
   await page.goto('/editor/');
   await page.getByLabel('OBS Browser Source size').selectOption('1920 × 300');
