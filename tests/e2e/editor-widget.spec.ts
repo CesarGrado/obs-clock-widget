@@ -191,6 +191,20 @@ test('uses painted vertical ink instead of the full line box for clipping', asyn
   await expect(page.locator('#clipping-warning')).toHaveText('');
 });
 
+test('warns for truly clipped decorative-font vertical ink and paint', async ({ page }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-font').selectOption('permanent-marker');
+  await page.locator('#line1-format').fill("'HI'");
+  await page.locator('#line1-size').fill('240');
+  await page.locator('#stroke').fill('8');
+  await page.locator('#shadow').fill('30');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+  await expect(page.locator('#clipping-warning')).toContainText('Line 1');
+  await expect(page.locator('#clipping-warning')).toContainText(/top|bottom/);
+});
+
 test('warns when Cabin zero digits will clip later even though the current time fits', async ({ page, context }) => {
   await page.goto('/editor/');
   await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
