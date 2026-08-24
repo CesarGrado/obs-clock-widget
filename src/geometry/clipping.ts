@@ -29,6 +29,40 @@ export interface ClippingIssue {
   suggestedFixes: string[];
 }
 
+export interface ElementBoundsDescriptor {
+  node: HTMLElement;
+  elementId: string;
+  label: string;
+  enabled: boolean;
+  paintMargins?: RenderedBounds;
+  suggestedFixes: string[];
+}
+
+export function collectElementBounds(
+  viewport: HTMLElement,
+  elements: ElementBoundsDescriptor[],
+): RenderedElementBounds[] {
+  const viewportRect = viewport.getBoundingClientRect();
+  return elements.map((element) => {
+    const rect = element.node.getBoundingClientRect();
+    const style = getComputedStyle(element.node);
+    return {
+      elementId: element.elementId,
+      label: element.label,
+      enabled: element.enabled,
+      visible: style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0',
+      bounds: {
+        left: rect.left - viewportRect.left,
+        top: rect.top - viewportRect.top,
+        right: rect.right - viewportRect.left,
+        bottom: rect.bottom - viewportRect.top,
+      },
+      paintMargins: element.paintMargins,
+      suggestedFixes: element.suggestedFixes,
+    };
+  });
+}
+
 export function evaluateElementBounds(
   viewport: ViewportBounds,
   elements: RenderedElementBounds[],
