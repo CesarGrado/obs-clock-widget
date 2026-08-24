@@ -179,6 +179,18 @@ test('warns for the widest localized future date even while the current runtime 
   await runtime.close();
 });
 
+test('uses painted vertical ink instead of the full line box for clipping', async ({ page }) => {
+  await page.goto('/editor/');
+  await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');
+  await page.locator('#line2-enabled').uncheck();
+  await page.locator('#line1-format').fill("'HI'");
+  await page.locator('#line1-size').fill('228');
+  await page.locator('#stroke').fill('1');
+  await page.locator('#shadow').fill('0');
+  await page.locator('[data-clock-measurement]').waitFor({ state: 'detached' });
+  await expect(page.locator('#clipping-warning')).toHaveText('');
+});
+
 test('warns when Cabin zero digits will clip later even though the current time fits', async ({ page, context }) => {
   await page.goto('/editor/');
   await page.getByLabel('OBS Browser Source size').selectOption('800 × 240');

@@ -20,29 +20,37 @@ export function clockPaintMargins(stroke: number, shadow: number) {
   };
 }
 
-interface HorizontalTextMetrics {
+interface TextInkMetrics {
   width: number;
   actualBoundingBoxLeft?: number;
   actualBoundingBoxRight?: number;
+  actualBoundingBoxAscent?: number;
+  actualBoundingBoxDescent?: number;
 }
 
-export function textInkHorizontalBounds(
+export function textInkBounds(
   bounds: RenderedBounds,
-  metrics: HorizontalTextMetrics,
+  metrics: TextInkMetrics,
   align: ClockConfig['align'],
+  baseline: number,
 ): RenderedBounds {
   const { actualBoundingBoxLeft: inkLeft, actualBoundingBoxRight: inkRight } = metrics;
-  if (![metrics.width, inkLeft, inkRight].every((value) => Number.isFinite(value))) return bounds;
-  const originX = align === 'left'
-    ? bounds.left
-    : align === 'center'
-      ? (bounds.left + bounds.right - metrics.width) / 2
-      : bounds.right - metrics.width;
-  return {
-    ...bounds,
-    left: originX - inkLeft!,
-    right: originX + inkRight!,
-  };
+  const { actualBoundingBoxAscent: ascent, actualBoundingBoxDescent: descent } = metrics;
+  const result = { ...bounds };
+  if ([metrics.width, inkLeft, inkRight].every((value) => Number.isFinite(value))) {
+    const originX = align === 'left'
+      ? bounds.left
+      : align === 'center'
+        ? (bounds.left + bounds.right - metrics.width) / 2
+        : bounds.right - metrics.width;
+    result.left = originX - inkLeft!;
+    result.right = originX + inkRight!;
+  }
+  if ([baseline, ascent, descent].every((value) => Number.isFinite(value))) {
+    result.top = baseline - ascent!;
+    result.bottom = baseline + descent!;
+  }
+  return result;
 }
 
 const candidateCache = new Map<string, string[]>();
@@ -51,7 +59,12 @@ const MAX_CANDIDATE_CACHE_ENTRIES = 32;
 export function clockTextCandidates(config: ClockConfig, lineIndex: number): string[] {
   const line = config.lines[lineIndex]!;
   const cacheKey = [config.mode, config.overtime, config.timezone, config.locale, lineIndex, line.format].join('|');
-  const cached = candidateCache.get(cacheKey); if (cached) return cached;
+  const cached = candidateCache.get(cacheKey);
+  if (cached) {
+    candidateCache.delete(cacheKey);
+    candidateCache.set(cacheKey, cached);
+    return cached;
+  }
   const values = new Set<string>();
   const clockFormatReachable = config.mode === 'clock' || lineIndex !== 0 || !config.overtime;
   if (clockFormatReachable) {
@@ -61,10 +74,11 @@ export function clockTextCandidates(config: ClockConfig, lineIndex: number): str
     for (let hour = 0; hour < 24; hour += 1) for (let minuteSecond = 0; minuteSecond < 60; minuteSecond += 1) {
       values.add(formatClock(new Date(Date.UTC(2028, 0, 1, hour, minuteSecond, minuteSecond)), line.format, config.timezone, config.locale));
     }
-    // The first seven days cover every weekday in each month; day 28 covers the
-    // widest two-digit day while keeping every sample a real calendar instant.
-    for (let month = 0; month < 12; month += 1) for (const day of [1, 2, 3, 4, 5, 6, 7, 28]) {
-      values.add(formatClock(new Date(Date.UTC(2028, month, day, 12, 59, 59)), line.format, config.timezone, config.locale));
+    // The first seven days cover every weekday in each month. Include every
+    // reachable high day rather than assuming proportional numerals make 28 widest.
+    for (let month = 0; month < 12; month += 1) for (const day of [1, 2, 3, 4, 5, 6, 7, 28, 29, 30, 31]) {
+      const instant = new Date(Date.UTC(2028, month, day, 12, 59, 59));
+      if (instant.getUTCMonth() === month) values.add(formatClock(instant, line.format, config.timezone, config.locale));
     }
   }
   if (config.mode === 'countdown' && lineIndex === 0) {
@@ -81,14 +95,14 @@ export function clockTextCandidates(config: ClockConfig, lineIndex: number): str
 }
 
 export function widestClockText(node: HTMLElement, candidates: string[]): string {
-  const textTransform = getComputedStyle(node).textTransform;
+  const style = getComputedStyle(node);
+  const textTransform = style.textTransform;
   const transform = (text: string) => textTransform === 'uppercase' ? text.toLocaleUpperCase() : textTransform === 'lowercase' ? text.toLocaleLowerCase() : text;
   let context: CanvasRenderingContext2D | null = null;
   if (!navigator.userAgent.includes('jsdom')) {
     try { context = document.createElement('canvas').getContext('2d'); } catch { /* unavailable canvas falls back to conservative text length */ }
   }
   if (context) {
-    const style = getComputedStyle(node);
     context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     let widest = candidates[0] ?? '';
     let widestWidth = context.measureText(transform(widest)).width;
@@ -99,6 +113,25 @@ export function widestClockText(node: HTMLElement, candidates: string[]): string
     return widest;
   }
   return candidates.reduce((widest, candidate) => transform(candidate).length > transform(widest).length ? candidate : widest, candidates[0] ?? '');
+}
+
+function textBaseline(node: HTMLElement, viewport: HTMLElement): number {
+  const marker = document.createElement('span');
+  marker.setAttribute('aria-hidden', 'true');
+  Object.assign(marker.style, { display: 'inline-block', width: '0', height: '0', padding: '0', margin: '0', verticalAlign: 'baseline' });
+  node.append(marker);
+  const baseline = marker.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  marker.remove();
+  return baseline;
+}
+
+function unionBounds(bounds: RenderedBounds[]): RenderedBounds {
+  return bounds.reduce((union, current) => ({
+    left: Math.min(union.left, current.left),
+    top: Math.min(union.top, current.top),
+    right: Math.max(union.right, current.right),
+    bottom: Math.max(union.bottom, current.bottom),
+  }));
 }
 
 export function applyWidestClockSamples(root: HTMLElement, config: ClockConfig): void {
@@ -143,12 +176,20 @@ export function clockClippingIssues(
     const node = nodes[index]!;
     const style = getComputedStyle(node);
     context!.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-    const text = style.textTransform === 'uppercase'
-      ? (node.textContent ?? '').toLocaleUpperCase()
+    const transform = (text: string) => style.textTransform === 'uppercase'
+      ? text.toLocaleUpperCase()
       : style.textTransform === 'lowercase'
-        ? (node.textContent ?? '').toLocaleLowerCase()
-        : (node.textContent ?? '');
-    element.bounds = textInkHorizontalBounds(element.bounds, context!.measureText(text), config.align);
+        ? text.toLocaleLowerCase()
+        : text;
+    const source = activeLines[index]!;
+    const candidates = new Set([node.textContent ?? '', ...clockTextCandidates(config, source.index)]);
+    const baseline = textBaseline(node, root);
+    element.bounds = unionBounds([...candidates].map((text) => textInkBounds(
+      element.bounds,
+      context!.measureText(transform(text)),
+      config.align,
+      baseline,
+    )));
   });
   return evaluateElementBounds(viewport, measured);
 }

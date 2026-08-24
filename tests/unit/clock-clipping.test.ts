@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockClippingIssues, clockPaintMargins, clockTextCandidates, textInkHorizontalBounds } from '../../src/geometry/clock-clipping';
+import { clockClippingIssues, clockPaintMargins, clockTextCandidates, textInkBounds } from '../../src/geometry/clock-clipping';
 import { cloneClockConfig } from '../../src/config/clone';
 import { DEFAULT_CONFIG } from '../../src/config/defaults';
 
@@ -8,19 +8,21 @@ const rect = (left: number, top: number, right: number, bottom: number): DOMRect
 });
 
 describe('clock clipping', () => {
-  it('uses glyph ink side-bearings, alignment, and half the stroke width', () => {
+  it('uses glyph ink bounds, the DOM baseline, alignment, and half the stroke width', () => {
     const bounds = { left: 0, top: 10, right: 200, bottom: 50 };
-    const metrics = { width: 100, actualBoundingBoxLeft: 2, actualBoundingBoxRight: 96 };
-    expect(textInkHorizontalBounds(bounds, metrics, 'left')).toEqual({ ...bounds, left: -2, right: 96 });
-    expect(textInkHorizontalBounds(bounds, metrics, 'center')).toEqual({ ...bounds, left: 48, right: 146 });
-    expect(textInkHorizontalBounds(bounds, metrics, 'right')).toEqual({ ...bounds, left: 98, right: 196 });
+    const metrics = { width: 100, actualBoundingBoxLeft: 2, actualBoundingBoxRight: 96, actualBoundingBoxAscent: 30, actualBoundingBoxDescent: 8 };
+    expect(textInkBounds(bounds, metrics, 'left', 44)).toEqual({ left: -2, top: 14, right: 96, bottom: 52 });
+    expect(textInkBounds(bounds, metrics, 'center', 44)).toEqual({ left: 48, top: 14, right: 146, bottom: 52 });
+    expect(textInkBounds(bounds, metrics, 'right', 44)).toEqual({ left: 98, top: 14, right: 196, bottom: 52 });
     expect(clockPaintMargins(1, 0)).toEqual({ left: 0.5, top: 0.5, right: 0.5, bottom: 0.5 });
     expect(clockPaintMargins(2, 6)).toEqual({ left: 7, top: 5, right: 7, bottom: 9 });
   });
 
   it('retains conservative DOM bounds when ink metrics are unavailable', () => {
     const bounds = { left: 0, top: 10, right: 200, bottom: 50 };
-    expect(textInkHorizontalBounds(bounds, { width: 100 }, 'right')).toBe(bounds);
+    expect(textInkBounds(bounds, { width: 100 }, 'right', 44)).toEqual(bounds);
+    expect(textInkBounds(bounds, { width: 100, actualBoundingBoxLeft: 2, actualBoundingBoxRight: 96 }, 'right', 44)).toEqual({ ...bounds, left: 98, right: 196 });
+    expect(textInkBounds(bounds, { width: 100, actualBoundingBoxAscent: 30, actualBoundingBoxDescent: 8 }, 'right', 44)).toEqual({ ...bounds, top: 14, bottom: 52 });
   });
 
   it('identifies the offending enabled line and includes stroke/shadow paint', () => {
@@ -47,6 +49,8 @@ describe('clock clipping', () => {
     const dates = clockTextCandidates(config, 1);
     expect(dates).toContain('Friday, September 1, 2028');
     expect(dates.some((text) => text.includes('Wednesday, November'))).toBe(true);
+    config.lines[1].format = 'D';
+    expect(clockTextCandidates(config, 1)).toEqual(expect.arrayContaining(['30', '31']));
     config.lines[0].format = 'HH:mm:ss';
     expect(clockTextCandidates(config, 0)).toContain('00:00:00');
 
