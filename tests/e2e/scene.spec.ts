@@ -42,35 +42,55 @@ test('scene builder produces a working full-screen scene URL', async ({ page, co
   expect(errors).toEqual([]);
 });
 
-test('scene runtime geometry is full-screen and visible at 320x180, 640x360, 1080p, and 4K', async ({ page }) => {
+test('scene runtime bounds contain long text at 320x180 preview scale, 1080p, 1440p, and 4K across alignment, paint, and motion endpoints', async ({ page }) => {
   // Use a maximum-valid 48-char headline + 64-char subtitle + long reveal to stress layout.
   const h = 'A'.repeat(48), sub = 'B'.repeat(64), rv = 'C'.repeat(32);
-  const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace(/\.\d+Z$/, 'Z'))}&rv=${encodeURIComponent(rv)}`;
+  const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace(/\.\d+Z$/, 'Z'))}&rv=${encodeURIComponent(rv)}&hs=240&ss=240&ns=240&rs=240&hc=%23FFFFFF&sc=%23000000&nc=%23FFFFFF&rc=%23000000`;
   await page.goto(`/v1/scene/${frag}`);
-  const boxesOk = (w: number, hgt: number) => new Promise<void>((resolve, reject) => {
-    (async () => {
-      await page.setViewportSize({ width: w, height: hgt });
-      // Wait for the ResizeObserver-driven --vw/--vh to apply and reflow before measuring.
-      await page.waitForFunction(() => {
-        const root = document.querySelector('.scene-root') as HTMLElement;
-        return root && getComputedStyle(root).getPropertyValue('--vw').trim() !== '';
-      });
-      await page.waitForTimeout(60);
-      const root = await page.locator('.scene-root').boundingBox();
-      const headline = await page.locator('.scene-headline').boundingBox();
-      const number = await page.locator('.scene-number').boundingBox();
-      const subtitle = await page.locator('.scene-subtitle').boundingBox();
-      expect(Math.round(root!.width)).toBe(w); expect(Math.round(root!.height)).toBe(hgt);
-      for (const box of [headline!, number!, subtitle!]) {
-        expect(box.y).toBeGreaterThanOrEqual(0); expect(box.y + box.height).toBeLessThanOrEqual(hgt);
+  await page.evaluate(() => (document as Document & { fonts: FontFaceSet }).fonts.ready);
+  const themes = ['dark-gradient', 'puzzlr-purple', 'neon-blue', 'sunset', 'minimal-black'];
+  const paints = await page.locator('.scene-root').evaluate((root, values) => values.map((theme) => {
+    root.setAttribute('data-theme', theme); const style = getComputedStyle(root);
+    return [style.backgroundImage, style.backgroundColor];
+  }), themes);
+  expect(paints.every(([image, color]) => image !== 'none' || color !== 'rgba(0, 0, 0, 0)')).toBe(true);
+
+  const motionEndpoints = [
+    { motion: 'none', transform: 'none' },
+    { motion: 'subtle', transform: 'translateY(-0.4%) scale(1.004)' },
+    { motion: 'subtle', transform: 'translateY(0.4%) scale(1.008)' },
+  ];
+  const viewports = [[320, 180], [1920, 1080], [2560, 1440], [3840, 2160]] as const;
+  for (const align of ['center', 'left']) for (const endpoint of motionEndpoints) for (const [index, [w, hgt]] of viewports.entries()) {
+    await page.setViewportSize({ width: w, height: hgt });
+    await page.locator('.scene-root').evaluate((root, state) => {
+      root.setAttribute('data-align', state.align); root.setAttribute('data-motion', state.motion); root.setAttribute('data-theme', state.theme);
+      const content = root.querySelector<HTMLElement>('.scene-content')!; content.style.animation = 'none'; content.style.transform = state.transform;
+    }, { align, motion: endpoint.motion, transform: endpoint.transform, theme: themes[index]! });
+    await page.waitForFunction(([width, height]) => {
+      const root = document.querySelector<HTMLElement>('.scene-root')!;
+      return root.clientWidth === width && root.clientHeight === height && getComputedStyle(root).getPropertyValue('--vw').trim() === `${width / 100}px`;
+    }, [w, hgt]);
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    for (const reveal of [false, true]) {
+      const geometry = await page.locator('.scene-root').evaluate((root, showReveal) => {
+        root.querySelector('.scene-panel')!.classList.toggle('scene-hidden', showReveal);
+        root.querySelector('.scene-reveal')!.classList.toggle('scene-shown', showReveal);
+        const rootBox = root.getBoundingClientRect();
+        const selectors = showReveal ? ['.scene-reveal'] : ['.scene-headline', '.scene-subtitle', '.scene-number'];
+        return { root: { width: rootBox.width, height: rootBox.height }, boxes: selectors.map((selector) => {
+          const box = root.querySelector(selector)!.getBoundingClientRect();
+          return { selector, left: box.left - rootBox.left, top: box.top - rootBox.top, right: box.right - rootBox.left, bottom: box.bottom - rootBox.top };
+        }) };
+      }, reveal);
+      expect(Math.round(geometry.root.width)).toBe(w); expect(Math.round(geometry.root.height)).toBe(hgt);
+      for (const box of geometry.boxes) {
+        expect(box.left, `${align}/${endpoint.transform}/${w}/${box.selector} left`).toBeGreaterThanOrEqual(-1);
+        expect(box.top, `${align}/${endpoint.transform}/${w}/${box.selector} top`).toBeGreaterThanOrEqual(-1);
+        expect(box.right, `${align}/${endpoint.transform}/${w}/${box.selector} right`).toBeLessThanOrEqual(w + 1);
+        expect(box.bottom, `${align}/${endpoint.transform}/${w}/${box.selector} bottom`).toBeLessThanOrEqual(hgt + 1);
       }
-      resolve();
-    })().catch(reject);
-  });
-  // Freeze both subtle-motion endpoints so the check is deterministic.
-  for (const delay of ['0s', '-12s']) {
-    await page.addStyleTag({ content: `.scene-content{animation-play-state:paused !important;animation-delay:${delay} !important}` });
-    for (const [w, hh] of [[320, 180], [640, 360], [1920, 1080], [3840, 2160]] as const) await boxesOk(w, hh);
+    }
   }
 });
 
