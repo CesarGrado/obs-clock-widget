@@ -203,9 +203,14 @@ test('warns when Cabin zero digits will clip later even though the current time 
 
   const runtime = await context.newPage(); await runtime.setViewportSize({ width: 800, height: 240 });
   await runtime.goto(await page.locator('#obs-url').inputValue()); await runtime.evaluate(() => document.fonts.ready);
-  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeLessThan(800);
-  await runtime.locator('.clock-line').evaluate((node) => { node.textContent = '00:00:00'; });
-  expect((await runtime.locator('.clock-line').boundingBox())!.width).toBeGreaterThan(800);
+  const widths = await runtime.locator('.clock-line').evaluate((node) => {
+    const current = node.getBoundingClientRect().width;
+    node.textContent = '00:00:00';
+    const zeroes = node.getBoundingClientRect().width;
+    return { current, zeroes };
+  });
+  expect(widths.current).toBeLessThan(800);
+  expect(widths.zeroes).toBeGreaterThan(800);
   await runtime.close();
 });
 
