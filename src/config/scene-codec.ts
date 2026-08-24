@@ -3,13 +3,19 @@ import { cloneSceneConfig } from './clone';
 import { normalizeSceneConfig } from './scene-defaults';
 import { clampWeight } from './fonts';
 
-const keys = ['v', 'h', 'sub', 'ct', 'hf', 'hs', 'hw', 'hc', 'sf', 'ss', 'sw', 'sc', 'nf', 'ns', 'nw', 'nc', 'rf', 'rs', 'rw', 'rc', 'th', 'mo', 'rv', 'rd', 'a'] as const;
-const allowed = new Set<string>(keys);
+// Canonical key order. The encoder emits keys in this order and omits any key whose value equals
+// the default, so `v` (always '1') leads and partial fragments are valid prefixes. The decoder
+// enforces this same order and rejects redundant default-valued keys.
+const KEYS = ['v', 'h', 'sub', 'ct', 'hf', 'hs', 'hw', 'hc', 'sf', 'ss', 'sw', 'sc', 'nf', 'ns', 'nw', 'nc', 'rf', 'rs', 'rw', 'rc', 'th', 'mo', 'rv', 'rd', 'a'] as const;
+const allowed = new Set<string>(KEYS);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const set = (p: URLSearchParams, key: string, value: unknown, fallback: unknown) => { if (!same(value, fallback)) p.set(key, String(value)); };
 
-export function encodeSceneConfig(value: SceneConfig): string {
-  const c = normalizeSceneConfig(value); const p = new URLSearchParams(); p.set('v', '1'); const d = DEFAULT_SCENE_CONFIG;
+// The encoder's canonical (key, encodedValue) sequence for a config. Defaults are omitted, so a
+// fragment carrying a default-valued key is NOT canonical and must be rejected by the decoder.
+export function canonicalPairs(value: SceneConfig): Array<[string, string]> {
+  const c = normalizeSceneConfig(value); const d = DEFAULT_SCENE_CONFIG;
+  const p = new URLSearchParams(); p.set('v', '1');
   set(p, 'h', c.headline, d.headline); set(p, 'sub', c.subtitle, d.subtitle); set(p, 'ct', c.countdownTarget, d.countdownTarget);
   const el = (k: 'headline' | 'subtitle' | 'number' | 'reveal') => {
     set(p, `${k[0]}f`, c[`${k}Font`], d[`${k}Font`]); set(p, `${k[0]}s`, c[`${k}Size`], d[`${k}Size`]);
@@ -18,6 +24,12 @@ export function encodeSceneConfig(value: SceneConfig): string {
   (['headline', 'subtitle', 'number', 'reveal'] as const).forEach(el);
   set(p, 'th', c.theme, d.theme); set(p, 'mo', c.motion, d.motion); set(p, 'rv', c.reveal, d.reveal); set(p, 'rd', c.revealDelay, d.revealDelay);
   set(p, 'a', c.align, d.align);
+  return Array.from(p.entries()) as Array<[string, string]>;
+}
+
+export function encodeSceneConfig(value: SceneConfig): string {
+  const p = new URLSearchParams();
+  for (const [k, v] of canonicalPairs(value)) p.set(k, v);
   return p.toString();
 }
 
@@ -36,7 +48,7 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     if (p.has('h')) c.headline = p.get('h')!;
     if (p.has('sub')) c.subtitle = p.get('sub')!;
     if (p.has('ct')) c.countdownTarget = p.get('ct')!;
-    const numeric = (key: string, fallback: number, min: number, max: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!new RegExp(`^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$`).test(rawValue)) throw new Error('Invalid number'); const n = Number(rawValue); if (n < min || n > max) throw new Error("Out of range"); return n; };
+    const numeric = (key: string, fallback: number, min: number, max: number) => { if (!p.has(key)) return fallback; const rawValue = p.get(key)!; if (!new RegExp(`^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$`).test(rawValue)) throw new Error('Invalid number'); const n = Number(rawValue); if (n < min || n > max) throw new Error('Out of range'); return n; };
     for (const k of ['headline', 'subtitle', 'number', 'reveal'] as const) {
       const pfx = k[0];
       if (p.has(`${pfx}f`)) (c as Record<string, unknown>)[`${k}Font`] = p.get(`${pfx}f`)!;
@@ -49,25 +61,32 @@ export function decodeSceneConfig(fragment: string): SceneConfig {
     if (p.has('rv')) c.reveal = p.get('rv')!;
     if (p.has('rd')) c.revealDelay = numeric('rd', c.revealDelay, 0, 3) as SceneConfig['revealDelay'];
     if (p.has('a')) c.align = p.get('a') as SceneConfig['align'];
-    // Canonical-contract check: every present value must already be in the encoder's own
-    // percent-encoding. The encoder emits '+' for spaces and uppercase-hex escapes (%2F, %3A,
-    // ...) via URLSearchParams, so inputs using '%20', '%41', or a raw ':' (which URLSearchParams
-    // would silently normalize on the way out) are rejected. Hex case is normalized so '%2f' and
-    // '%2F' are treated as equal. Partial fragments are allowed; only present keys are checked.
-    const normHex = (s: string) => s.replace(/%([0-9a-fA-F]{2})/g, (_m, h) => `%${h.toUpperCase()}`);
-    for (const pair of raw.split('&')) {
-      const eq = pair.indexOf('=');
-      const key = pair.slice(0, eq);
-      const rawValue = pair.slice(eq + 1);
-      const decodedValue = decodeURIComponent(rawValue.replace(/\+/g, ' '));
-      // Re-encode the decoded value through URLSearchParams (the encoder's own serializer) and
-      // read back the canonical encoded form via toString(), not get() (which returns decoded).
-      const canonicalValue = new URLSearchParams({ [key]: decodedValue }).toString().slice(key.length + 1);
-      if (normHex(canonicalValue) !== normHex(rawValue)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+
+    // Canonical-contract check: the raw fragment must be an ordered subsequence of the encoder's
+    // canonical key/value pairs. This enforces (a) canonical key order, (b) rejection of redundant
+    // default-valued keys the encoder would omit, and (c) per-value canonical percent encoding.
+    // Compare values in their DECODED form so '+'/'%20' and hex-case differences are treated equal,
+    // while truly noncanonical encodings (%41) still fail because they decode differently.
+    const canonical = canonicalPairs(c);
+    const canonicalKeys = canonical.map(([k]) => k);
+    if (!isOrderedSubsequence(rawKeys(raw), canonicalKeys)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+    for (const [key, rawValue] of rawPairs(raw)) {
+      const expected = canonical.find(([k]) => k === key)?.[1];
+      if (expected === undefined) return cloneSceneConfig(DEFAULT_SCENE_CONFIG); // redundant default key
+      const decode = (s: string) => decodeURIComponent(s.replace(/\+/g, ' '));
+      if (decode(expected) !== decode(rawValue)) return cloneSceneConfig(DEFAULT_SCENE_CONFIG);
     }
     return normalizeSceneConfig(c);
   } catch { return cloneSceneConfig(DEFAULT_SCENE_CONFIG); }
 }
+
+const rawKeys = (raw: string): string[] => raw.split('&').map((pair) => pair.slice(0, pair.indexOf('=')));
+const rawPairs = (raw: string): Array<[string, string]> => raw.split('&').map((pair) => { const eq = pair.indexOf('='); return [pair.slice(0, eq), pair.slice(eq + 1)]; });
+const isOrderedSubsequence = (sub: string[], full: string[]): boolean => {
+  let i = 0;
+  for (const item of full) { if (sub[i] === item) i++; if (i === sub.length) return true; }
+  return i === sub.length;
+};
 
 export function hasUnsupportedSceneVersion(fragment: string): boolean {
   try {

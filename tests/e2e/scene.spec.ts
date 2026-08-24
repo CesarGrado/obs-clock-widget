@@ -29,7 +29,7 @@ test('scene builder produces a working full-screen scene URL', async ({ page, co
 test('scene runtime geometry is full-screen and visible at 320x180, 640x360, 1080p, and 4K', async ({ page }) => {
   // Use a maximum-valid 48-char headline + 64-char subtitle + long reveal to stress layout.
   const h = 'A'.repeat(48), sub = 'B'.repeat(64), rv = 'C'.repeat(32);
-  const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&rv=${encodeURIComponent(rv)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace('.000Z', 'Z'))}`;
+  const frag = `#v=1&h=${encodeURIComponent(h)}&sub=${encodeURIComponent(sub)}&ct=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString().replace(/\.\d+Z$/, 'Z'))}&rv=${encodeURIComponent(rv)}`;
   await page.goto(`/v1/scene/${frag}`);
   const boxesOk = (w: number, hgt: number) => new Promise<void>((resolve, reject) => {
     (async () => {
@@ -90,8 +90,8 @@ test('editor preview with maximum-valid text stays contained inside its 16:9 fra
 });
 
 test('scene runtime reveals at zero and respects theme and reduced-motion styling hooks', async ({ page }) => {
-  const soon = new Date(Date.now() + 3_000).toISOString().replace('.000Z', 'Z');
-  await page.goto(`/v1/scene/#v=1&h=STARTING&rv=LIVE&th=sunset&mo=none&rd=0&ct=${encodeURIComponent(soon)}`);
+  const soon = new Date(Date.now() + 3_000).toISOString().replace(/\.\d+Z$/, 'Z');
+  await page.goto(`/v1/scene/#v=1&h=STARTING&ct=${encodeURIComponent(soon)}&th=sunset&mo=none&rv=LIVE&rd=0`);
   await expect(page.locator('.scene-number')).toHaveText(/^00:00:0\d$/);
   await expect(page.locator('.scene-root')).toHaveAttribute('data-theme', 'sunset');
   await page.emulateMedia({ reducedMotion: 'reduce' });

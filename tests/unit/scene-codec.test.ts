@@ -53,10 +53,14 @@ describe('scene codec', () => {
       expect(swapped[key as 'subtitleFont']).toBe('bebas-neue');
       expect(swapped[`${key.replace('Font', 'Weight')}` as 'subtitleWeight']).toBe(400);
     }
-    // Explicit weights are clamped too, and encoding re-emits the clamped value.
-    const d2 = decodeSceneConfig('v=1&hf=bebas-neue&hw=700');
+    // An explicit weight that is a real available weight for the font is canonical and kept.
+    // bebas-neue ships only 400; the encoder emits hw=400 (it differs from the default 700).
+    const d2 = decodeSceneConfig('v=1&hf=bebas-neue&hw=400');
     expect(d2.headlineWeight).toBe(400);
     expect(encodeSceneConfig(d2)).toContain('hf=bebas-neue&hw=400');
+    // A noncanonical explicit weight (700 is not available for bebas-neue, so the encoder would
+    // clamp it to 400 and omit hw) is rejected by the canonical contract.
+    expect(decodeSceneConfig('v=1&hf=bebas-neue&hw=700')).toEqual(DEFAULT_SCENE_CONFIG);
   });
   it('rejects out-of-range numerics instead of silently clamping', () => {
     expect(decodeSceneConfig('v=1&hs=999')).toEqual(DEFAULT_SCENE_CONFIG);
@@ -66,21 +70,25 @@ describe('scene codec', () => {
     expect(decodeSceneConfig('v=1&hw=350')).toEqual(DEFAULT_SCENE_CONFIG);
     expect(decodeSceneConfig('v=1&hw=800')).toEqual(DEFAULT_SCENE_CONFIG);
   });
-  it('enforces a strict canonical fragment and rejects noncanonical separators', () => {
-    for (const bad of ['v=1&&h=EMPTYPAIR', 'v=1&h=VALUE&', 'v=1&', '&v=1', 'v=1&h=', 'v=1&h=hi&', 'v=1&=x', 'v=1&h=hi&&rd=2', 'v=1;h=x']) {
-      expect(decodeSceneConfig(bad)).toEqual(DEFAULT_SCENE_CONFIG);
-    }
-    // Noncanonical encodings that URLSearchParams would silently normalize must be rejected.
-    // '%41' (should be 'A'), '%20' (encoder emits '+'), and a raw ':' in ct (encoder emits '%3A').
-    for (const bad of ['v=1&h=%41', 'v=1&h=GAME%20NIGHT', 'v=1&ct=2099-12-31T23:59:00Z']) {
-      expect(decodeSceneConfig(bad)).toEqual(DEFAULT_SCENE_CONFIG);
-    }
-    // Canonical encodings are accepted: '+' for spaces and '%2F'/'%3A' case-insensitive.
-    expect(decodeSceneConfig('v=1&h=A+B').headline).toBe('A B');
-    expect(decodeSceneConfig('v=1&h=GAME%2fNIGHT').headline).toBe('GAME/NIGHT');
-    // A clean canonical fragment still decodes.
-    const ok = decodeSceneConfig('v=1&h=GAME+NIGHT&th=neon-blue&mo=none&rd=2');
-    expect(ok.headline).toBe('GAME NIGHT');
+  it('enforces canonical key order, default-field omission, and rejects noncanonical fragments', () => {
+    // Noncanonical key ORDER: 'h' before 'v' is rejected (encoder always leads with v=1).
+    expect(decodeSceneConfig('h=GAME&v=1')).toEqual(DEFAULT_SCENE_CONFIG);
+    // Redundant DEFAULT-valued field: headline equals the default, which the encoder omits.
+    expect(decodeSceneConfig('v=1&h=STREAM+STARTING+SOON')).toEqual(DEFAULT_SCENE_CONFIG);
+    // Other default-valued redundancies are also rejected.
+    expect(decodeSceneConfig('v=1&th=dark-gradient')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&mo=subtle')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&rd=1')).toEqual(DEFAULT_SCENE_CONFIG);
+    expect(decodeSceneConfig('v=1&a=center')).toEqual(DEFAULT_SCENE_CONFIG);
+    // Empty (all defaults) canonical fragment is valid.
+    expect(decodeSceneConfig('v=1')).toEqual(DEFAULT_SCENE_CONFIG);
+    // Valid partial canonical fragment (non-default headline, canonical order) is preserved.
+    const ok = decodeSceneConfig('v=1&h=GAME');
+    expect(ok.headline).toBe('GAME');
+    // Multi-key canonical fragment in correct order with non-default values is preserved.
+    const ok2 = decodeSceneConfig('v=1&h=GAME+NIGHT&th=neon-blue&mo=none&rd=2');
+    expect(ok2.headline).toBe('GAME NIGHT');
+    expect(ok2.theme).toBe('neon-blue');
   });
   it('round-trips canonical fragments byte-for-byte (decode then re-encode equals input)', () => {
     // Uses a non-default ct so it is not elided as a default during re-encode. Key order follows
