@@ -17,6 +17,7 @@ import { clippingCopySuccess } from './clipboard';
 import { createLayoutSettler } from './layout-settling';
 import { applyWidestClockSamples, clockClippingIssues } from '../geometry/clock-clipping';
 import type { ClippingIssue } from '../geometry/clipping';
+import { addPreviewNavigation } from './preview-navigation';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -108,11 +109,13 @@ function buildEditor(app: HTMLElement) {
   const previewPanel = element('section', { class: 'preview-panel', 'aria-label': 'Live preview' }); const previewHead = element('div', { class: 'preview-head' });
   const backdrop = select('backdrop', ['checkerboard','dark','light']); backdrop.setAttribute('aria-label', 'Preview backdrop'); previewHead.append(element('h2', {}, 'Live preview'), backdrop);
   const stage = element('div', { id: 'preview-stage', class: 'preview-stage checkerboard' }); stage.append(element('div', { id: 'preview-root' })); previewPanel.append(previewHead, stage, element('p', { id: 'empty-warning', class: 'warning' }));
+  const destroyPreviewNavigation = addPreviewNavigation(panel, previewPanel, previewHead);
   layout.append(panel, previewPanel); app.append(header, layout);
+  return destroyPreviewNavigation;
 }
 
 export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig: (next: ClockConfig) => void } {
-  buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
+  const destroyPreviewNavigation = buildEditor(app); let config = location.hash ? decodeConfig(location.hash) : cloneClockConfig(DEFAULT_CONFIG); let resetSnapshot: typeof config | undefined; let clock: ReturnType<typeof renderClock> | undefined;
   let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let measurementRoot: HTMLElement | undefined;
   const layoutSettler = createLayoutSettler();
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
@@ -346,7 +349,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   };
   byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
-  sync(); refresh(); return { destroy: () => { layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
+  sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app'); if (app) initEditor(app);
