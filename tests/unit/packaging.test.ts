@@ -13,11 +13,12 @@ describe('deployment packaging', () => {
     expect(read('public/_headers').split('\n')[0]).toMatch(/^#/);
   });
 
-  it('sets explicit revalidation rules for both scene editor and scene runtime HTML routes', () => {
+  it('prevents Cloudflare from transforming HTML into analytics-enabled responses', () => {
     const headers = read('public/_headers');
-    for (const route of ['/scene-editor/*', '/v1/scene/*']) {
-      expect(headers).toContain(`${route}\n  Cache-Control: public, max-age=0, must-revalidate`);
+    for (const route of ['/*', '/editor/*', '/scene-editor/*', '/v1/clock/*', '/v1/scene/*']) {
+      expect(headers).toContain(`${route}\n  Cache-Control: public, max-age=0, must-revalidate, no-transform`);
     }
+    expect(headers).toContain('/assets/*\n  Cache-Control: public, max-age=31536000, immutable, no-transform');
   });
 
   it('provides an ordered unit gate that builds packaging artifacts before testing them', () => {

@@ -23,8 +23,6 @@ const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<st
 };
 const labeled = (parent: HTMLElement, label: string, control: HTMLElement) => { parent.append(element('label', { for: control.id }, label), control); };
 const option = (value: string, label = value) => element('option', { value }, label);
-const WEIGHT_LABELS: Record<number, string> = { 400: 'Regular', 500: 'Medium', 600: 'Semibold', 700: 'Bold' };
-const weightOption = (weight: number) => option(String(weight), `${weight} ${WEIGHT_LABELS[weight] ?? 'Weight'}`);
 const fontSelect = (id: string) => { const node = element('select', { id }); FONT_CATEGORIES.forEach((category) => { const group = element('optgroup', { label: category }); FONTS.filter((font) => font.category === category).forEach((font) => group.append(option(font.id, font.label))); node.append(group); }); return node; };
 const select = (id: string, values: readonly string[]) => { const node = element('select', { id }); values.forEach((value) => node.append(option(value))); return node; };
 const input = (id: string, type: string, min?: number, max?: number, step?: number) => element('input', { id, type, ...(type === 'number' ? { required: '' } : {}), ...(min === undefined ? {} : { min: String(min) }), ...(max === undefined ? {} : { max: String(max) }), ...(step === undefined ? {} : { step: String(step) }) });
@@ -120,7 +118,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   const byId = <T extends HTMLElement>(id: string) => app.querySelector<T>(`#${id}`)!;
   const weightOptions = (n: number, fontId: string, weight: number) => {
     const control = byId<HTMLSelectElement>(`line${n}-weight`);
-    control.replaceChildren(...(fontById(fontId)?.weights ?? [400, 500, 600, 700]).map(weightOption));
+    control.replaceChildren(...(fontById(fontId)?.weights ?? [400, 500, 600, 700]).map((value) => option(String(value))));
     control.value = String(clampWeight(fontId, weight));
   };
   const syncFormatPreset = (n: number, format: string) => { const preset = byId<HTMLSelectElement>(`line${n}-format-preset`); preset.value = Array.from(preset.options).some(({ value }) => value === format) ? format : ''; };

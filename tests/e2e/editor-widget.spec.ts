@@ -290,7 +290,7 @@ test('font library offers grouped fonts with per-font weight filtering', async (
   expect(groupCount).toBeGreaterThanOrEqual(5);
   await fontSelect.selectOption('bebas-neue');
   const weightOptions = await page.locator('#line1-weight option').allTextContents();
-  expect(weightOptions).toEqual(['400 Regular']);
+  expect(weightOptions).toEqual(['400']);
   await page.locator('#line1-weight').selectOption('400');
   expect(await page.locator('#obs-url').inputValue()).toContain('ft1=bebas-neue');
 });
