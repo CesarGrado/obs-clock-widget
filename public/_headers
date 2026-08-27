@@ -5,6 +5,8 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: accelerometer=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()
   Cross-Origin-Opener-Policy: same-origin
+
+/
   Cache-Control: public, max-age=0, must-revalidate, no-transform
 
 /assets/*
