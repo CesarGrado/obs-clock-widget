@@ -14,6 +14,7 @@ import { clippingCopySuccess } from '../editor/clipboard';
 import { createLayoutSettler } from '../editor/layout-settling';
 import { sceneClippingIssues } from '../geometry/scene-clipping';
 import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
+import { addPreviewNavigation } from '../editor/preview-navigation';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -291,17 +292,20 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   byId('copy-setup').addEventListener('click', () => { if (commitSchedule()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });
 
   const previewPanel = element('section', { class: 'preview-panel', id: 'preview-panel', 'aria-labelledby': 'scene-preview-heading' });
-  previewPanel.append(element('h2', { id: 'scene-preview-heading' }, 'Scene preview'));
+  const previewHead = element('div', { class: 'preview-head' });
+  previewHead.append(element('h2', { id: 'scene-preview-heading' }, 'Scene preview'));
+  previewPanel.append(previewHead);
   const frame = element('div', { class: 'scene-frame' });
   frame.append(element('div', { id: 'preview-root', class: 'scene-preview' }));
   previewPanel.append(frame);
   const layout = element('div', { class: 'editor-layout' });
   const controls = element('section', { class: 'controls', 'aria-label': 'Scene settings' });
   while (app.firstChild) controls.append(app.firstChild);
+  const destroyPreviewNavigation = addPreviewNavigation(controls, previewPanel, previewHead);
   layout.append(controls, previewPanel);
   app.append(layout);
   sync(); refresh();
-  return { destroy: () => { layoutSettler.cancel(); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
+  return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app');
