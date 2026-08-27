@@ -399,10 +399,16 @@ describe('clock editor', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const font = app.querySelector<HTMLSelectElement>('#line1-font')!;
     const weight = app.querySelector<HTMLSelectElement>('#line1-weight')!;
-    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400', '500', '600', '700']);
+    expect(Array.from(weight.options).map(({ value, textContent }) => [value, textContent])).toEqual([
+      ['400', '400 Regular'],
+      ['500', '500 Medium'],
+      ['600', '600 Semibold'],
+      ['700', '700 Bold'],
+    ]);
     font.value = 'bebas-neue'; font.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(Array.from(weight.options).map(({ value }) => value)).toEqual(['400']);
+    expect(Array.from(weight.options).map(({ value, textContent }) => [value, textContent])).toEqual([['400', '400 Regular']]);
     expect(weight.value).toBe('400');
+    expect(weight.selectedOptions[0]?.textContent).toBe('400 Regular');
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('ft1=bebas-neue');
     expect((app.querySelector('#preview-root .clock-line') as HTMLElement).style.fontFamily).toContain('Bebas Neue');
     font.value = 'lato'; font.dispatchEvent(new Event('change', { bubbles: true }));
