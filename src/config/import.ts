@@ -5,6 +5,7 @@ import { DEFAULT_CONFIG, type ClockConfig } from './defaults';
 import { normalizeConfig } from './schema';
 
 export const CANONICAL_ORIGIN = 'https://obs-clock-widget.pages.dev';
+export const PRODUCTION_ORIGIN = 'https://timer.puxxlr.com';
 export const MAX_FRAGMENT_BYTES = 2048;
 
 export type ConfigImportErrorCode =
@@ -52,7 +53,7 @@ function payloadFromInput(value: string, currentOrigin: string): string | Config
   if (url.username || url.password) return error('credentials');
   let deploymentOrigin: string;
   try { deploymentOrigin = new URL(currentOrigin).origin; } catch { return error('invalid-url'); }
-  if (url.origin !== deploymentOrigin && url.origin !== CANONICAL_ORIGIN) return error('foreign-origin');
+  if (![deploymentOrigin, CANONICAL_ORIGIN, PRODUCTION_ORIGIN].includes(url.origin)) return error('foreign-origin');
   if (url.search) return error('query-config');
   const rawPath = input.match(/^[A-Za-z][A-Za-z\d+.-]*:\/\/[^/?#]*([^?#]*)/)?.[1];
   if ((rawPath !== '/v1/clock/' && rawPath !== '/v1/clock') || (url.pathname !== '/v1/clock/' && url.pathname !== '/v1/clock')) return error('wrong-route');

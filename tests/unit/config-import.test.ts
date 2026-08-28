@@ -11,6 +11,16 @@ describe('strict config import', () => {
     if (result.ok) expect(result.config).toMatchObject({ mode: 'countdown', countdownTarget: '2026-08-24T18:30:00Z', overtime: true });
   });
 
+  it('imports an official production clock URL from the Pages deployment', () => {
+    const result = parseConfigImport(
+      'https://timer.puxxlr.com/v1/clock/#v=1&tz=Pacific%2FChatham',
+      'https://obs-clock-widget.pages.dev',
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.config.timezone).toBe('Pacific/Chatham');
+  });
+
   it.each([
     'v=1&tz=Pacific%2FChatham&f1=HH%3Amm+%27NZ%27',
     '#v=1&tz=Pacific%2FChatham&f1=HH%3Amm+%27NZ%27',
