@@ -675,6 +675,57 @@ describe('clock editor', () => {
     const format = app.querySelector<HTMLInputElement>('#line1-format')!; format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));
     expect(app.querySelector('#line1-error')?.textContent).toContain('Unsupported'); expect(app.querySelector('#preview-root')?.textContent).toBe(before); editor.destroy();
   });
+  it('blocks copying a stale URL while a line format is invalid', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line2-format')!;
+
+    format.value = 'MMM X'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    expect(format.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(format);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Fix the highlighted line format first.');
+    editor.destroy();
+  });
+  it('clears line format errors after valid input and synchronized config recovery', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+
+    format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(format.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#line1-error')?.textContent).toBe('');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('');
+
+    format.value = "HH:mm 'oops"; format.dispatchEvent(new Event('input', { bubbles: true }));
+    editor.applyConfig(DEFAULT_CONFIG);
+    expect(format.value).toBe(DEFAULT_CONFIG.lines[0].format);
+    expect(format.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#line1-error')?.textContent).toBe('');
+    editor.destroy();
+  });
+  it('recovers an invalid line format through a valid format preset', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    const preset = app.querySelector<HTMLSelectElement>('#line1-format-preset')!;
+
+    format.value = 'HH:mm X'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    preset.value = 'HH:mm'; preset.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    expect(format.value).toBe('HH:mm');
+    expect(format.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#line1-error')?.textContent).toBe('');
+    expect(writeText).toHaveBeenCalledOnce();
+    editor.destroy();
+  });
   it('rejects empty global numeric controls without changing preview or URL', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const gap = app.querySelector<HTMLInputElement>('#gap')!;

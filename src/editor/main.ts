@@ -157,7 +157,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLInputElement>('timezone').removeAttribute('aria-invalid'); byId('timezone-error').textContent = ''; byId('copy-status').textContent = ''; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     ['gap', 'stroke', 'shadow'].forEach((key) => { byId<HTMLInputElement>(key).removeAttribute('aria-invalid'); byId(`${key}-error`).textContent = ''; });
-    config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
+    config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; const format = byId<HTMLInputElement>(`line${n}-format`); format.value = line.format; format.removeAttribute('aria-invalid'); byId(`line${n}-error`).textContent = ''; syncFormatPreset(n, line.format);
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; const size = byId<HTMLInputElement>(`line${n}-size`); size.value = String(line.size); size.removeAttribute('aria-invalid'); byId(`line${n}-size-error`).textContent = ''; weightOptions(n, line.font, line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
@@ -327,13 +327,18 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
       if (!control.validity.valid) { control.setAttribute('aria-invalid', 'true'); error.textContent = 'Enter a whole-number size from 10 to 240 pixels.'; return; }
       control.removeAttribute('aria-invalid'); error.textContent = '';
     } else if (!control.validity.valid) return;
-    if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; syncFormatPreset(n, control.value); }
+    if (field === 'format') {
+      const error = validateFormat(control.value); const errorNode = byId(`line${n}-error`);
+      errorNode.textContent = error ?? '';
+      if (error) { control.setAttribute('aria-invalid', 'true'); return; }
+      control.removeAttribute('aria-invalid'); byId('copy-status').textContent = ''; syncFormatPreset(n, control.value);
+    }
     (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control);
     if (field === 'font') { const line = config.lines[n - 1]!; line.weight = clampWeight(line.font, line.weight); weightOptions(n, line.font, line.weight); }
     byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   }); };
   [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
-    byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); } }); });
+    byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { const format = byId<HTMLInputElement>(`line${n}-format`); format.value = value; format.removeAttribute('aria-invalid'); byId(`line${n}-error`).textContent = ''; byId('copy-status').textContent = ''; config.lines[n - 1]!.format = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); } }); });
   (['locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
   const measurementErrors = { gap: 'Enter a whole-number line gap from 0 to 80 pixels.', stroke: 'Enter a whole-number stroke from 0 to 8 pixels.', shadow: 'Enter a whole-number shadow from 0 to 30 pixels.' } as const;
   (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => {
@@ -391,8 +396,17 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     if (timezoneInput.value.trim() === config.timezone && timezoneInput.getAttribute('aria-invalid') !== 'true') return true;
     timezoneInput.focus(); byId('copy-status').textContent = 'Choose a valid timezone first.'; return false;
   };
-  byId('copy-url').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
-  byId('open-preview').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
+  const commitFormats = () => {
+    for (const n of [1, 2]) {
+      const control = byId<HTMLInputElement>(`line${n}-format`); const error = validateFormat(control.value);
+      if (!error && control.getAttribute('aria-invalid') !== 'true') continue;
+      control.setAttribute('aria-invalid', 'true'); byId(`line${n}-error`).textContent = error ?? 'Choose a valid line format.';
+      control.focus(); byId('copy-status').textContent = 'Fix the highlighted line format first.'; return false;
+    }
+    return true;
+  };
+  byId('copy-url').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
+  byId('open-preview').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
   sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
