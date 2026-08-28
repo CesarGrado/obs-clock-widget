@@ -76,6 +76,7 @@ function buildEditor(app: HTMLElement) {
   countdownSetup.append(quick);
   const schedule = element('div', { class: 'schedule-row' });
   const scheduleDate = input('countdown-date', 'date'); const scheduleTime = input('countdown-time', 'time'); scheduleTime.setAttribute('step', '60');
+  [scheduleDate, scheduleTime].forEach((control) => control.setAttribute('aria-describedby', 'countdown-error resolved-target'));
   labeled(schedule, 'Ends on', scheduleDate); labeled(schedule, 'At', scheduleTime); labeled(schedule, 'Timezone', element('output', { id: 'countdown-timezone', class: 'timezone-note', for: 'timezone' }));
   countdownSetup.append(schedule, element('p', { id: 'resolved-target', class: 'resolved-summary', 'aria-live': 'polite' }), element('p', { id: 'countdown-error', class: 'error', role: 'alert' }));
   const postZero = element('fieldset', { class: 'post-zero' }); postZero.append(element('legend', {}, 'When it reaches zero'));
@@ -141,6 +142,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     targetInput.value = config.countdownTarget;
     // A synchronized config is by definition valid: clear any stale manual-entry error state.
     targetInput.removeAttribute('aria-invalid');
+    ['date', 'time'].forEach((key) => byId<HTMLInputElement>(`countdown-${key}`).removeAttribute('aria-invalid'));
     byId('countdown-error').textContent = '';
     if (config.mode === 'countdown' && config.countdownTarget) targetToDateTime(config.countdownTarget);
     byId<HTMLInputElement>('post-zero-clock').checked = !config.overtime; byId<HTMLInputElement>('post-zero-overtime').checked = config.overtime;
@@ -219,6 +221,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     config.countdownTarget = iso;
     const targetInput = byId<HTMLInputElement>('countdown-target');
     targetInput.value = iso; targetInput.removeAttribute('aria-invalid');
+    ['date', 'time'].forEach((key) => byId<HTMLInputElement>(`countdown-${key}`).removeAttribute('aria-invalid'));
     targetToDateTime(iso);
     byId('countdown-error').textContent = '';
     byId<HTMLSelectElement>('preset').value = 'Custom';
@@ -237,23 +240,41 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   }));
   const scheduleFromInputs = () => {
     const dateValue = byId<HTMLInputElement>('countdown-date').value; const timeValue = byId<HTMLInputElement>('countdown-time').value;
-    if (!dateValue) return;
-    const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = (timeValue || '00:00').split(':').map(Number);
+    const dateInput = byId<HTMLInputElement>('countdown-date'); const timeInput = byId<HTMLInputElement>('countdown-time');
+    const setScheduleError = (message: string) => { [dateInput, timeInput].forEach((control) => control.setAttribute('aria-invalid', 'true')); byId('countdown-error').textContent = message; };
+    [dateInput, timeInput].forEach((control) => control.removeAttribute('aria-invalid')); byId('countdown-error').textContent = '';
+    if (!dateValue || !timeValue) {
+      if (!dateValue) dateInput.setAttribute('aria-invalid', 'true');
+      if (!timeValue) timeInput.setAttribute('aria-invalid', 'true');
+      byId('countdown-error').textContent = !dateValue && !timeValue ? 'Pick a date and time for your countdown.' : !dateValue ? 'Pick a date for your countdown.' : 'Pick a time for your countdown.';
+      return;
+    }
+    const [year, month, day] = dateValue.split('-').map(Number); const [hour, minute] = timeValue.split(':').map(Number);
     const timeZone = config.timezone === 'local' ? undefined : config.timezone;
     // DST-safe conversion: enumerate candidates, keep exact round-trips, pick the earliest
     // ("first occurrence"). Null means the wall time is a DST gap and is rejected.
     const absolute = wallTimeToInstant({ year: year!, month: month ?? 1, day: day!, hour: hour ?? 0, minute: minute ?? 0 }, timeZone);
     if (!absolute) {
-      byId('countdown-error').textContent = 'That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.';
+      setScheduleError('That time does not exist because of a daylight-saving change in your timezone — pick 30 minutes earlier or later.');
       return;
     }
     const iso = `${absolute.toISOString().slice(0, 19)}Z`;
-    if (!isAbsoluteIsoTarget(iso)) { byId('countdown-error').textContent = 'Pick a valid date and time for your countdown.'; return; }
-    if (absolute.getTime() - Date.now() > 99 * 86_400_000) { byId('countdown-error').textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
+    if (!isAbsoluteIsoTarget(iso)) { setScheduleError('Pick a valid date and time for your countdown.'); return; }
+    if (absolute.getTime() - Date.now() > 99 * 86_400_000) { setScheduleError('That time is more than 99 days away. Choose a closer end time.'); return; }
     setCountdownTarget(iso);
   };
   byId<HTMLInputElement>('countdown-date').addEventListener('change', scheduleFromInputs);
   byId<HTMLInputElement>('countdown-time').addEventListener('change', scheduleFromInputs);
+  const commitCountdown = () => {
+    if (config.mode !== 'countdown') return true;
+    const targetInput = byId<HTMLInputElement>('countdown-target');
+    if (targetInput.getAttribute('aria-invalid') === 'true') { byId<HTMLDetailsElement>('countdown-advanced').open = true; targetInput.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields before copying.'; return false; }
+    const scheduleControls = ['date', 'time'].map((key) => byId<HTMLInputElement>(`countdown-${key}`));
+    scheduleControls.forEach((control) => { if (!control.value) control.setAttribute('aria-invalid', 'true'); });
+    const invalid = scheduleControls.find((control) => control.getAttribute('aria-invalid') === 'true');
+    if (!invalid) return true;
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields before copying.'; return false;
+  };
   app.querySelectorAll<HTMLInputElement>('input[name="post-zero"]').forEach((radio) => radio.addEventListener('change', (event) => {
     config.overtime = (event.target as HTMLInputElement).value === 'overtime';
     byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
@@ -262,7 +283,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     const value = (event.target as HTMLInputElement).value.trim(); const error = byId('countdown-error');
     if (!isAbsoluteIsoTarget(value)) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'Enter an exact end time with a Z or ±HH:mm offset (e.g. 2026-08-23T18:30:00Z).'; return; }
     if (Date.parse(value) - Date.now() > 99 * 86_400_000) { (event.target as HTMLInputElement).setAttribute('aria-invalid', 'true'); error.textContent = 'That time is more than 99 days away. Choose a closer end time.'; return; }
-    (event.target as HTMLInputElement).removeAttribute('aria-invalid'); error.textContent = ''; config.countdownTarget = value; targetToDateTime(value); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
+    (event.target as HTMLInputElement).removeAttribute('aria-invalid'); error.textContent = ''; config.countdownTarget = value; ['date', 'time'].forEach((key) => byId<HTMLInputElement>(`countdown-${key}`).removeAttribute('aria-invalid')); targetToDateTime(value); byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   });
   const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };
   const chooseTimezone = (timezone: TimezoneId) => {
@@ -353,7 +374,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
     try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); }
   };
-  byId('copy-url').addEventListener('click', () => void copy(widgetUrl(config), 'OBS URL copied.')); byId('copy-setup').addEventListener('click', () => void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'));
+  byId('copy-url').addEventListener('click', () => { if (commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
   byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
   sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }

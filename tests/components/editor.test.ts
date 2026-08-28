@@ -79,8 +79,85 @@ describe('clock editor', () => {
     expect(app.querySelector('#countdown-error')?.textContent).toContain('99 days');
     editor.destroy(); vi.useRealTimers();
   });
+  it('preserves an advanced absolute target with seconds and its fall-back occurrence when copying', async () => {
+    vi.setSystemTime(new Date('2026-10-25T12:00:00Z'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'new york'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = '2026-11-01T01:30:47-05:00'; target.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+
+    expect(writeText.mock.calls[0]![0]).toContain('ct=2026-11-01T01%3A30%3A47-05%3A00');
+    expect(target.value).toBe('2026-11-01T01:30:47-05:00');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('opens the advanced countdown disclosure before focusing an invalid target on copy', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const advanced = app.querySelector<HTMLDetailsElement>('#countdown-advanced')!;
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = 'not-a-date'; target.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(advanced.open).toBe(false);
+
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    expect(advanced.open).toBe(true);
+    expect(document.activeElement).toBe(target);
+    expect(writeText).not.toHaveBeenCalled();
+    editor.destroy();
+  });
+  it('requires a countdown time before copying instead of silently using midnight', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#obs-url')!.value;
+
+    time.value = ''; time.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(time.value).toBe('');
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('time');
+    expect(app.querySelector<HTMLInputElement>('#obs-url')!.value).toBe(beforeUrl);
+
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(time);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(app.querySelector('#copy-status')?.textContent).toContain('Fix the highlighted countdown fields');
+    editor.destroy();
+  });
+  it('requires a countdown date before copying instead of reusing the previous target', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#obs-url')!.value;
+
+    date.value = ''; date.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#countdown-error')?.textContent).toContain('date');
+    expect(app.querySelector<HTMLInputElement>('#obs-url')!.value).toBe(beforeUrl);
+
+    (app.querySelector('#copy-setup') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(date);
+    expect(writeText).not.toHaveBeenCalled();
+    editor.destroy();
+  });
   it('rejects a wall time inside the spring-forward DST gap instead of silently shifting it', () => {
     vi.setSystemTime(new Date('2026-03-01T12:00:00Z'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
     timezone.value = 'new york'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
@@ -93,6 +170,9 @@ describe('clock editor', () => {
     date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
     expect(app.querySelector('#countdown-error')?.textContent).toContain('does not exist');
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).not.toContain('ct=2026-03-08T');
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    expect(document.activeElement).toBe(date);
+    expect(writeText).not.toHaveBeenCalled();
     editor.destroy(); vi.useRealTimers();
   });
   it('resolves the fall-back DST overlap deterministically to the first occurrence', () => {
@@ -173,6 +253,23 @@ describe('clock editor', () => {
     date.value = '2026-09-27'; time.value = '02:45';
     date.dispatchEvent(new Event('change', { bubbles: true })); time.dispatchEvent(new Event('change', { bubbles: true }));
     expect(app.querySelector('#countdown-error')?.textContent).toContain('does not exist');
+    editor.destroy(); vi.useRealTimers();
+  });
+  it('clears stale date and time aria-invalid when a valid advanced target is entered', () => {
+    vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!; const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = ''; time.value = ''; date.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+    expect(time.getAttribute('aria-invalid')).toBe('true');
+
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = '2026-08-24T18:30:47Z'; target.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(date.getAttribute('aria-invalid')).toBeNull();
+    expect(time.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
     editor.destroy(); vi.useRealTimers();
   });
   it('clears stale aria-invalid when a quick duration replaces a malformed target', () => {
