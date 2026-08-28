@@ -70,6 +70,18 @@ describe('scene editor', () => {
     editor.destroy();
   });
 
+  it('keeps undo unavailable when the scene is already at defaults', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    app.querySelector<HTMLButtonElement>('#reset')!.click();
+
+    expect(undo.disabled).toBe(true);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Defaults already restored.');
+    editor.destroy();
+  });
+
   it('invalidates stale reset history when an external scene config is applied', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);

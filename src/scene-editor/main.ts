@@ -329,7 +329,9 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   byId('reset').addEventListener('click', () => {
     if (encodeSceneConfig(config) !== encodeSceneConfig(DEFAULT_SCENE_CONFIG)) resetSnapshot = cloneSceneConfig(config);
     config = cloneSceneConfig(DEFAULT_SCENE_CONFIG); scheduleActive = false; sync(); clearScheduleErrors(); refresh();
-    byId<HTMLButtonElement>('undo-reset').disabled = false; byId('copy-status').textContent = 'Defaults restored. Undo is available.';
+    const canUndo = resetSnapshot !== undefined;
+    byId<HTMLButtonElement>('undo-reset').disabled = !canUndo;
+    byId('copy-status').textContent = canUndo ? 'Defaults restored. Undo is available.' : 'Defaults already restored.';
   });
   byId('undo-reset').addEventListener('click', () => {
     if (!resetSnapshot) return;
