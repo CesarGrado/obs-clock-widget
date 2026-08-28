@@ -40,6 +40,42 @@ describe('clock editor', () => {
     expect(app.querySelector('#line2-size-error')?.textContent).toBe('');
     editor.destroy();
   });
+  it.each([
+    ['gap', '81', '7', 'Enter a whole-number line gap from 0 to 80 pixels.'],
+    ['stroke', '9', '2', 'Enter a whole-number stroke from 0 to 8 pixels.'],
+    ['shadow', '31', '6', 'Enter a whole-number shadow from 0 to 30 pixels.'],
+  ] as const)('explains an invalid %s without replacing the generated URL and clears the error after recovery', (id, invalid, valid, message) => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const control = app.querySelector<HTMLInputElement>(`#${id}`)!;
+    const url = app.querySelector<HTMLInputElement>('#obs-url')!;
+    const beforeUrl = url.value;
+
+    control.value = invalid; control.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(control.getAttribute('aria-describedby')).toBe(`${id}-error`);
+    expect(control.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector(`#${id}-error`)?.textContent).toBe(message);
+    expect(url.value).toBe(beforeUrl);
+
+    control.value = valid; control.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(control.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector(`#${id}-error`)?.textContent).toBe('');
+    expect(url.value).not.toBe(beforeUrl);
+    editor.destroy();
+  });
+  it('clears stale global measurement errors when a valid config is synchronized', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const gap = app.querySelector<HTMLInputElement>('#gap')!;
+    gap.value = '81'; gap.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(gap.getAttribute('aria-invalid')).toBe('true');
+
+    editor.applyConfig(DEFAULT_CONFIG);
+
+    expect(gap.value).toBe('8');
+    expect(gap.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#gap-error')?.textContent).toBe('');
+    editor.destroy();
+  });
   it('configures an absolute event countdown and displays its resolved target', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);

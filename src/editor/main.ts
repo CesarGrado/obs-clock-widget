@@ -96,7 +96,11 @@ function buildEditor(app: HTMLElement) {
   timezoneWrap.append(timezone, element('div', { id: 'timezone-options', class: 'timezone-options', role: 'listbox' }));
   global.append(element('label', { for: 'timezone' }, 'Timezone'), timezoneWrap, element('p', { id: 'timezone-help', class: 'help' }, 'Search by city, region, canonical ID, or UTC offset.'), element('p', { id: 'timezone-error', class: 'error', role: 'alert' }));
   labeled(global, 'Locale', select('locale', LOCALES));
-  labeled(global, 'Alignment', select('align', ['left','center','right'])); labeled(global, 'Line gap', input('gap', 'number', 0, 80)); labeled(global, 'Stroke', input('stroke', 'number', 0, 8)); labeled(global, 'Shadow', input('shadow', 'number', 0, 30)); panel.append(global);
+  labeled(global, 'Alignment', select('align', ['left','center','right']));
+  const measurement = (id: 'gap' | 'stroke' | 'shadow', label: string, max: number) => {
+    const control = input(id, 'number', 0, max, 1); control.setAttribute('aria-describedby', `${id}-error`); labeled(global, label, control); global.append(element('p', { id: `${id}-error`, class: 'error', role: 'alert' }));
+  };
+  measurement('gap', 'Line gap', 80); measurement('stroke', 'Stroke', 8); measurement('shadow', 'Shadow', 30); panel.append(global);
   buildLine(panel, 1); buildLine(panel, 2); panel.append(element('button', { id: 'swap-lines', type: 'button', class: 'secondary' }, 'Swap lines'), element('button', { id: 'match-line2-style', type: 'button', class: 'secondary' }, 'Match Line 2 style to Line 1'), element('button', { id: 'match-line1-style', type: 'button', class: 'secondary' }, 'Match Line 1 style to Line 2'), element('p', { id: 'token-help', class: 'help' }, "Tokens: HH H h mm m ss s a, dddd ddd, MMMM MMM M, D, YYYY YY. Put literal text in 'single quotes'."));
   const output = element('fieldset'); output.append(element('legend', {}, 'Output'));
   const obsSize = select('obs-size', ['1920 × 300', '800 × 240']); labeled(output, 'OBS Browser Source size', obsSize);
@@ -151,6 +155,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     app.querySelectorAll<HTMLLabelElement>('.mode-card').forEach((card) => card.classList.toggle('active', card.querySelector('input')?.checked === true));
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
+    ['gap', 'stroke', 'shadow'].forEach((key) => { byId<HTMLInputElement>(key).removeAttribute('aria-invalid'); byId(`${key}-error`).textContent = ''; });
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; const size = byId<HTMLInputElement>(`line${n}-size`); size.value = String(line.size); size.removeAttribute('aria-invalid'); byId(`line${n}-size-error`).textContent = ''; weightOptions(n, line.font, line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
@@ -329,7 +334,12 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   [1,2].forEach((n) => { lineControl(n, 'enabled', (c) => (c as HTMLInputElement).checked); lineControl(n, 'format', (c) => c.value); lineControl(n, 'font', (c) => c.value); lineControl(n, 'size', (c) => Number(c.value)); lineControl(n, 'weight', (c) => Number(c.value)); lineControl(n, 'color', (c) => c.value.toUpperCase()); lineControl(n, 'opacity', (c) => Number(c.value)); lineControl(n, 'transform', (c) => c.value);
     byId<HTMLSelectElement>(`line${n}-format-preset`).addEventListener('change', (event) => { const value = (event.target as HTMLSelectElement).value; if (value) { byId<HTMLInputElement>(`line${n}-format`).value = value; config.lines[n - 1]!.format = value; byId<HTMLSelectElement>('preset').value = 'Custom'; refresh(); } }); });
   (['locale','align'] as const).forEach((key) => byId<HTMLSelectElement>(key).addEventListener('change', (event) => { (config as unknown as Record<string, unknown>)[key] = (event.target as HTMLSelectElement).value; refresh(); }));
-  (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => { const control = event.target as HTMLInputElement; if (!control.validity.valid) return; config[key] = Number(control.value); refresh(); }));
+  const measurementErrors = { gap: 'Enter a whole-number line gap from 0 to 80 pixels.', stroke: 'Enter a whole-number stroke from 0 to 8 pixels.', shadow: 'Enter a whole-number shadow from 0 to 30 pixels.' } as const;
+  (['gap','stroke','shadow'] as const).forEach((key) => byId<HTMLInputElement>(key).addEventListener('input', (event) => {
+    const control = event.target as HTMLInputElement; const error = byId(`${key}-error`);
+    if (!control.validity.valid) { control.setAttribute('aria-invalid', 'true'); error.textContent = measurementErrors[key]; return; }
+    control.removeAttribute('aria-invalid'); error.textContent = ''; config[key] = Number(control.value); refresh();
+  }));
   byId<HTMLSelectElement>('preset').addEventListener('change', (event) => { const chosen = PRESETS[(event.target as HTMLSelectElement).value]; if (chosen) { config = cloneClockConfig(chosen); sync(); refresh(); } });
   byId('swap-lines').addEventListener('click', () => { config.lines = [config.lines[1], config.lines[0]]; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); });
   byId('match-line2-style').addEventListener('click', () => {
