@@ -10,7 +10,7 @@ import { cloneSceneConfig } from '../config/clone';
 import { renderScene } from '../scene/renderer';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant, instantToWallFields, timezoneLabel } from '../editor/tz';
-import { clippingCopySuccess } from '../editor/clipboard';
+import { clippingCopySuccess, copyText } from '../editor/clipboard';
 import { createLayoutSettler } from '../editor/layout-settling';
 import { sceneClippingIssues } from '../geometry/scene-clipping';
 import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
@@ -297,7 +297,8 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   byId('preview-zero').addEventListener('change', refresh);
   const copy = async (text: string, success: string) => {
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
-    try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); }
+    if (await copyText(text)) { byId('copy-status').textContent = successSnapshot; return; }
+    byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select();
   };
   byId('copy-url').addEventListener('click', () => { if (commitScene()) void copy(sceneUrl(config), 'Scene URL copied.'); });
   byId('copy-setup').addEventListener('click', () => { if (commitScene()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });

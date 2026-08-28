@@ -13,7 +13,7 @@ import { validateFormat } from '../time/format';
 import { parseConfigImport } from '../config/import';
 import { isAbsoluteIsoTarget } from '../time/countdown';
 import { wallTimeToInstant } from './tz';
-import { clippingCopySuccess } from './clipboard';
+import { clippingCopySuccess, copyText } from './clipboard';
 import { createLayoutSettler } from './layout-settling';
 import { applyWidestClockSamples, clockClippingIssues } from '../geometry/clock-clipping';
 import type { ClippingIssue } from '../geometry/clipping';
@@ -388,7 +388,8 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   });
   const copy = async (text: string, success: string) => {
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
-    try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); }
+    if (await copyText(text)) { byId('copy-status').textContent = successSnapshot; return; }
+    byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select();
   };
   const commitTimezone = () => {
     if (timezoneInput.value.trim() === config.timezone && timezoneInput.getAttribute('aria-invalid') !== 'true') return true;

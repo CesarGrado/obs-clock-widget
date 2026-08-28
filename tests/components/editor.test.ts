@@ -103,6 +103,24 @@ describe('clock editor', () => {
 
     open.mockRestore(); editor.destroy();
   });
+  it('copies complete clock setup text through the legacy fallback when clipboard permission is denied', async () => {
+    const writeText = vi.fn().mockRejectedValue(new DOMException('Denied', 'NotAllowedError'));
+    Object.assign(navigator, { clipboard: { writeText } });
+    const copied: string[] = [];
+    Object.defineProperty(document, 'execCommand', { configurable: true, value: vi.fn(() => {
+      copied.push((document.activeElement as HTMLTextAreaElement).value);
+      return true;
+    }) });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+
+    (app.querySelector('#copy-setup') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(copied).toHaveLength(1));
+    expect(copied[0]).toContain('OBS Browser Source\nURL:');
+    expect(copied[0]).toContain('Size: 1920 × 300');
+    expect(app.querySelector('#copy-status')?.textContent).toContain('Setup text copied');
+    editor.destroy();
+  });
   it('configures an absolute event countdown and displays its resolved target', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
@@ -986,7 +1004,7 @@ describe('clock editor', () => {
     await vi.waitFor(() => expect(document.querySelector('[data-clock-measurement]')).toBeNull());
     (app.querySelector('#copy-setup') as HTMLButtonElement).click();
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Size: 800 × 240')));
-    expect(app.querySelector('#copy-status')?.textContent).toBe('Setup text copied.');
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toBe('Setup text copied.'));
     editor.destroy(); bounds.mockRestore();
   });
 
