@@ -92,6 +92,49 @@ describe('scene editor', () => {
     expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toContain('script');
     editor.destroy();
   });
+  it.each([
+    ['headline', '', 'copy-url'],
+    ['number-size', '999', 'copy-setup'],
+  ] as const)('blocks copying stale scene output while %s is invalid', (fieldId, invalidValue, buttonId) => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const field = app.querySelector<HTMLInputElement>(`#${fieldId}`)!;
+
+    field.value = invalidValue;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector(`#${buttonId}`) as HTMLButtonElement).click();
+
+    expect(document.activeElement).toBe(field);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(app.querySelector('#copy-status')?.textContent).toContain('Fix the highlighted scene fields');
+    editor.destroy();
+  });
+
+  it('allows copying after synchronization restores invalid scene fields', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+
+    headline.value = '';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(headline.getAttribute('aria-invalid')).toBe('true');
+
+    const theme = app.querySelector<HTMLInputElement>('#theme-sunset')!;
+    theme.checked = true;
+    theme.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(headline.value).toBe(DEFAULT_SCENE_CONFIG.headline);
+    expect(headline.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#headline-error')?.textContent).toBe('');
+    editor.destroy();
+  });
+
   it('surfaces each typography size boundary without changing rendered or exported state', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);

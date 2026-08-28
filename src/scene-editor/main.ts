@@ -122,7 +122,11 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
 
   const sync = () => {
     byId<HTMLInputElement>('headline').value = config.headline; byId<HTMLInputElement>('subtitle').value = config.subtitle; byId<HTMLInputElement>('reveal').value = config.reveal;
+    for (const key of ['headline', 'subtitle', 'reveal'] as const) {
+      byId<HTMLInputElement>(key).removeAttribute('aria-invalid'); byId(`${key}-error`).textContent = '';
+    }
     for (const key of ['headline', 'subtitle', 'number', 'reveal'] as const) {
+      byId<HTMLInputElement>(`${key}-size`).removeAttribute('aria-invalid'); byId(`${key}-size-error`).textContent = '';
       byId<HTMLSelectElement>(`${key}-font`).value = config[`${key}Font`];
       byId<HTMLInputElement>(`${key}-size`).value = String(config[`${key}Size`]);
       byId<HTMLSelectElement>(`${key}-weight`).replaceChildren(...config[`${key}Font`] ? fontById(config[`${key}Font`])!.weights.map(weightOption) : []);
@@ -282,14 +286,21 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     if (!invalid) return true;
     invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted schedule fields before copying this scene.'; return false;
   };
+  const commitScene = () => {
+    if (!commitSchedule()) return false;
+    const invalid = app.querySelector<HTMLInputElement>('[aria-invalid="true"]:not(:disabled)');
+    if (!invalid) return true;
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted scene fields before copying this scene.'; return false;
+  };
+
   byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
   byId('preview-zero').addEventListener('change', refresh);
   const copy = async (text: string, success: string) => {
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
     try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('scene-url').select(); }
   };
-  byId('copy-url').addEventListener('click', () => { if (commitSchedule()) void copy(sceneUrl(config), 'Scene URL copied.'); });
-  byId('copy-setup').addEventListener('click', () => { if (commitSchedule()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });
+  byId('copy-url').addEventListener('click', () => { if (commitScene()) void copy(sceneUrl(config), 'Scene URL copied.'); });
+  byId('copy-setup').addEventListener('click', () => { if (commitScene()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });
 
   const previewPanel = element('section', { class: 'preview-panel', id: 'preview-panel', 'aria-labelledby': 'scene-preview-heading' });
   const previewHead = element('div', { class: 'preview-head' });
