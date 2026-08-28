@@ -702,6 +702,9 @@ describe('clock editor', () => {
     const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
     expect(timezone.getAttribute('role')).toBe('combobox');
     expect(timezone.getAttribute('aria-controls')).toBe('timezone-options');
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Choose a valid timezone first.');
     timezone.value = 'kathmandu'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
     expect(app.querySelector('[role="option"]')?.textContent).toContain('Asia/Kathmandu');
     timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
@@ -709,6 +712,7 @@ describe('clock editor', () => {
     expect(timezone.value).toBe('Asia/Kathmandu');
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('tz=Asia%2FKathmandu');
     expect(app.querySelector('#timezone-error')?.textContent).toBe('');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('');
     editor.destroy();
   });
   it('rejects arbitrary timezone text and preserves the last valid URL and preview', () => {
@@ -716,10 +720,70 @@ describe('clock editor', () => {
     const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
     const beforeUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
     const beforePreview = app.querySelector('#preview-root')?.textContent;
-    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(timezone.getAttribute('aria-invalid')).toBe('true');
+    timezone.dispatchEvent(new Event('change', { bubbles: true }));
     expect(app.querySelector('#timezone-error')?.textContent).toContain('Choose a timezone');
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(beforeUrl);
     expect(app.querySelector('#preview-root')?.textContent).toBe(beforePreview);
+    editor.destroy();
+  });
+  it('blocks copying a stale URL while the timezone entry is invalid', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    expect(timezone.getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(timezone);
+    expect(writeText).not.toHaveBeenCalled();
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Choose a valid timezone first.');
+    editor.destroy();
+  });
+  it('blocks previewing a stale URL while the timezone entry is invalid', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#open-preview') as HTMLButtonElement).click();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(timezone);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Choose a valid timezone first.');
+    open.mockRestore(); editor.destroy();
+  });
+  it('blocks copying stale setup text while the timezone entry is invalid', () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-setup') as HTMLButtonElement).click();
+
+    expect(writeText).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(timezone);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Choose a valid timezone first.');
+    editor.destroy();
+  });
+  it('clears a stale timezone error when a valid config is synchronized', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'Not/A_Zone'; timezone.dispatchEvent(new Event('change', { bubbles: true }));
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+    expect(timezone.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Choose a valid timezone first.');
+
+    editor.applyConfig(DEFAULT_CONFIG);
+
+    expect(timezone.value).toBe('local');
+    expect(timezone.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#timezone-error')?.textContent).toBe('');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('');
     editor.destroy();
   });
   it('reports catalog zones unavailable in the current browser and preserves valid config', () => {
@@ -765,6 +829,21 @@ describe('clock editor', () => {
     timezone.value = 'definitely no timezone'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
     expect(timezone.hasAttribute('aria-activedescendant')).toBe(false);
     expect(timezone.getAttribute('aria-expanded')).toBe('false');
+    editor.destroy();
+  });
+  it('closes open timezone options when a config is synchronized', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const timezone = app.querySelector<HTMLInputElement>('#timezone')!;
+    timezone.value = 'america'; timezone.dispatchEvent(new Event('input', { bubbles: true }));
+    timezone.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    expect(timezone.getAttribute('aria-expanded')).toBe('true');
+    expect(timezone.getAttribute('aria-activedescendant')).toBeTruthy();
+
+    editor.applyConfig(DEFAULT_CONFIG);
+
+    expect(timezone.getAttribute('aria-expanded')).toBe('false');
+    expect(timezone.hasAttribute('aria-activedescendant')).toBe(false);
+    expect(app.querySelector('#timezone-options')?.children).toHaveLength(0);
     editor.destroy();
   });
 

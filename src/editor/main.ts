@@ -141,6 +141,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     byId<HTMLInputElement>('countdown-time').value = `${get('hour')}:${get('minute')}`;
   };
   const sync = () => {
+    closeTimezoneOptions();
     (byId<HTMLInputElement>('mode-clock')).checked = config.mode === 'clock'; (byId<HTMLInputElement>('mode-countdown')).checked = config.mode === 'countdown';
     const targetInput = byId<HTMLInputElement>('countdown-target');
     targetInput.value = config.countdownTarget;
@@ -153,7 +154,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     byId('countdown-setup').hidden = config.mode !== 'countdown';
     byId('countdown-timezone').textContent = config.timezone === 'local' ? 'This device' : config.timezone;
     app.querySelectorAll<HTMLLabelElement>('.mode-card').forEach((card) => card.classList.toggle('active', card.querySelector('input')?.checked === true));
-    byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
+    byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLInputElement>('timezone').removeAttribute('aria-invalid'); byId('timezone-error').textContent = ''; byId('copy-status').textContent = ''; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     ['gap', 'stroke', 'shadow'].forEach((key) => { byId<HTMLInputElement>(key).removeAttribute('aria-invalid'); byId(`${key}-error`).textContent = ''; });
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
@@ -292,8 +293,8 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   });
   const closeTimezoneOptions = () => { timezoneOptions.replaceChildren(); visibleTimezones = []; activeTimezone = -1; timezoneInput.setAttribute('aria-expanded', 'false'); timezoneInput.removeAttribute('aria-activedescendant'); };
   const chooseTimezone = (timezone: TimezoneId) => {
-    if (!isTimezoneSupported(timezone)) { byId('timezone-error').textContent = 'This timezone is not supported by the current browser. Choose another timezone.'; closeTimezoneOptions(); return; }
-    config.timezone = timezone; timezoneInput.value = timezone; byId('timezone-error').textContent = ''; byId<HTMLSelectElement>('preset').value = 'Custom'; closeTimezoneOptions(); if (config.mode === 'countdown' && config.countdownTarget) { targetToDateTime(config.countdownTarget); byId('countdown-timezone').textContent = timezone; } refresh();
+    if (!isTimezoneSupported(timezone)) { timezoneInput.setAttribute('aria-invalid', 'true'); byId('timezone-error').textContent = 'This timezone is not supported by the current browser. Choose another timezone.'; closeTimezoneOptions(); return; }
+    config.timezone = timezone; timezoneInput.value = timezone; timezoneInput.removeAttribute('aria-invalid'); byId('timezone-error').textContent = ''; byId('copy-status').textContent = ''; byId<HTMLSelectElement>('preset').value = 'Custom'; closeTimezoneOptions(); if (config.mode === 'countdown' && config.countdownTarget) { targetToDateTime(config.countdownTarget); byId('countdown-timezone').textContent = timezone; } refresh();
   };
   const showTimezoneOptions = (query: string) => {
     const descriptions = searchTimezones(query); visibleTimezones = descriptions.map(({ id }) => id); activeTimezone = -1; timezoneInput.removeAttribute('aria-activedescendant'); timezoneOptions.replaceChildren();
@@ -302,10 +303,10 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   };
   const validateTimezoneInput = () => {
     const candidate = timezoneInput.value.trim();
-    if (!isCatalogTimezone(candidate)) { byId('timezone-error').textContent = 'Choose a timezone from the canonical timezone list.'; closeTimezoneOptions(); return; }
+    if (!isCatalogTimezone(candidate)) { timezoneInput.setAttribute('aria-invalid', 'true'); byId('timezone-error').textContent = 'Choose a timezone from the canonical timezone list.'; closeTimezoneOptions(); return; }
     chooseTimezone(candidate);
   };
-  timezoneInput.addEventListener('input', () => { byId('timezone-error').textContent = ''; showTimezoneOptions(timezoneInput.value); });
+  timezoneInput.addEventListener('input', () => { if (timezoneInput.value.trim() === config.timezone) timezoneInput.removeAttribute('aria-invalid'); else timezoneInput.setAttribute('aria-invalid', 'true'); byId('timezone-error').textContent = ''; showTimezoneOptions(timezoneInput.value); });
   timezoneInput.addEventListener('change', validateTimezoneInput);
   timezoneInput.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') { closeTimezoneOptions(); return; }
@@ -384,8 +385,14 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
     try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); }
   };
-  byId('copy-url').addEventListener('click', () => { if (commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
-  byId('open-preview').addEventListener('click', () => { if (commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
+  const commitTimezone = () => {
+    if (timezoneInput.value.trim() === config.timezone && timezoneInput.getAttribute('aria-invalid') !== 'true') return true;
+    validateTimezoneInput();
+    if (timezoneInput.value.trim() === config.timezone && timezoneInput.getAttribute('aria-invalid') !== 'true') return true;
+    timezoneInput.focus(); byId('copy-status').textContent = 'Choose a valid timezone first.'; return false;
+  };
+  byId('copy-url').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
+  byId('open-preview').addEventListener('click', () => { if (commitTimezone() && commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
   sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
