@@ -76,6 +76,33 @@ describe('clock editor', () => {
     expect(app.querySelector('#gap-error')?.textContent).toBe('');
     editor.destroy();
   });
+  it('blocks stale exports while any numeric appearance field is invalid', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const cases = [
+      ['line1-size', '241', 'copy-url'],
+      ['line2-size', '9', 'copy-setup'],
+      ['gap', '81', 'open-preview'],
+      ['stroke', '9', 'copy-url'],
+      ['shadow', '31', 'copy-setup'],
+    ] as const;
+
+    for (const [controlId, invalidValue, actionId] of cases) {
+      const control = app.querySelector<HTMLInputElement>(`#${controlId}`)!;
+      control.value = invalidValue; control.dispatchEvent(new Event('input', { bubbles: true }));
+      (app.querySelector<HTMLButtonElement>(`#${actionId}`)!).click();
+
+      expect(document.activeElement).toBe(control);
+      expect(app.querySelector('#copy-status')?.textContent).toBe('Fix the highlighted appearance field first.');
+      expect(writeText).not.toHaveBeenCalled();
+      expect(open).not.toHaveBeenCalled();
+      editor.applyConfig(DEFAULT_CONFIG);
+    }
+
+    open.mockRestore(); editor.destroy();
+  });
   it('configures an absolute event countdown and displays its resolved target', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);

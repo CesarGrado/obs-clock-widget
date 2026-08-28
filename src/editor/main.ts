@@ -396,6 +396,17 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     if (timezoneInput.value.trim() === config.timezone && timezoneInput.getAttribute('aria-invalid') !== 'true') return true;
     timezoneInput.focus(); byId('copy-status').textContent = 'Choose a valid timezone first.'; return false;
   };
+  const commitAppearance = () => {
+    const invalid = Array.from(app.querySelectorAll<HTMLInputElement>('input[type="number"]')).find((control) => !control.validity.valid || control.getAttribute('aria-invalid') === 'true');
+    if (!invalid) return true;
+    invalid.setAttribute('aria-invalid', 'true');
+    const errorId = invalid.getAttribute('aria-describedby');
+    const error = errorId ? byId(errorId) : undefined;
+    if (error && !error.textContent) {
+      error.textContent = invalid.id.endsWith('-size') ? 'Enter a whole-number size from 10 to 240 pixels.' : measurementErrors[invalid.id as keyof typeof measurementErrors];
+    }
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted appearance field first.'; return false;
+  };
   const commitFormats = () => {
     for (const n of [1, 2]) {
       const control = byId<HTMLInputElement>(`line${n}-format`); const error = validateFormat(control.value);
@@ -405,8 +416,8 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     }
     return true;
   };
-  byId('copy-url').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
-  byId('open-preview').addEventListener('click', () => { if (commitFormats() && commitTimezone() && commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
+  byId('copy-url').addEventListener('click', () => { if (commitFormats() && commitAppearance() && commitTimezone() && commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitFormats() && commitAppearance() && commitTimezone() && commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
+  byId('open-preview').addEventListener('click', () => { if (commitFormats() && commitAppearance() && commitTimezone() && commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
   sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 
