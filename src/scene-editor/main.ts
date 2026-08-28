@@ -15,6 +15,7 @@ import { createLayoutSettler } from '../editor/layout-settling';
 import { sceneClippingIssues } from '../geometry/scene-clipping';
 import type { ClippedEdge, ClippingIssue } from '../geometry/clipping';
 import { addPreviewNavigation } from '../editor/preview-navigation';
+import { parseSceneConfigImport } from '../config/scene-import';
 
 const element = <K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] => {
   const node = document.createElement(tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); if (text !== undefined) node.textContent = text; return node;
@@ -110,6 +111,10 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     actions.append(element('label', { for: 'preview-zero' }, 'Preview zero state'));
     actions.append(element('input', { id: 'preview-zero', type: 'checkbox' }));
     const url = element('input', { id: 'scene-url', type: 'text', readonly: '' }); labeled(actions, 'Scene URL', url);
+    const importForm = element('form', { class: 'import-existing', novalidate: '' });
+    const existingUrl = element('input', { id: 'existing-scene-url', type: 'text', maxlength: '4096', autocomplete: 'off', 'aria-describedby': 'import-help import-status' });
+    importForm.append(element('label', { for: 'existing-scene-url' }, 'Load existing scene URL or fragment'), existingUrl, element('button', { id: 'load-existing', type: 'submit' }, 'Load'));
+    actions.append(importForm, element('p', { id: 'import-help', class: 'hint' }, 'Paste a generated /v1/scene/ URL, or its fragment beginning with v=1 or #v=1.'), element('p', { id: 'import-status', role: 'status', 'aria-live': 'polite' }));
     actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('button', { id: 'open-preview', type: 'button' }, 'Open scene preview'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
     app.append(actions);
   };
@@ -279,22 +284,42 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   byId('countdown-date').addEventListener('change', scheduleFromInputs);
   byId('countdown-time').addEventListener('change', scheduleFromInputs);
+  const scheduleInputsMatchConfig = () => {
+    if (!isAbsoluteIsoTarget(config.countdownTarget)) return false;
+    const wall = instantToWallFields(new Date(config.countdownTarget));
+    return byId<HTMLInputElement>('countdown-date').value === wall.date && byId<HTMLInputElement>('countdown-time').value === wall.time;
+  };
   const commitSchedule = () => {
     if (!scheduleActive) return true;
-    scheduleFromInputs();
+    if (scheduleInputsMatchConfig()) clearScheduleErrors(); else scheduleFromInputs();
     const invalid = ['date', 'time'].map((key) => byId<HTMLInputElement>(`countdown-${key}`)).find((node) => node.getAttribute('aria-invalid') === 'true');
     if (!invalid) return true;
     invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted schedule fields before using this scene.'; return false;
   };
   const commitScene = () => {
     if (!commitSchedule()) return false;
-    const invalid = app.querySelector<HTMLInputElement>('[aria-invalid="true"]:not(:disabled)');
+    const invalid = app.querySelector<HTMLInputElement>('[aria-invalid="true"]:not(:disabled):not(#existing-scene-url)');
     if (!invalid) return true;
     invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted scene fields before using this scene.'; return false;
   };
 
   byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
   byId('preview-zero').addEventListener('change', refresh);
+  const importForm = app.querySelector<HTMLFormElement>('.import-existing')!;
+  const existingUrl = byId<HTMLInputElement>('existing-scene-url');
+  importForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const result = parseSceneConfigImport(existingUrl.value);
+    if (!result.ok) {
+      existingUrl.setAttribute('aria-invalid', 'true');
+      byId('import-status').textContent = 'This URL could not be loaded. Check that it is an unmodified generated scene URL or fragment, then try again.';
+      return;
+    }
+    existingUrl.removeAttribute('aria-invalid');
+    config = result.config; scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); clearScheduleErrors(); refresh();
+    byId('import-status').textContent = 'Existing scene URL loaded.';
+  });
+  existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
   const copy = async (text: string, success: string) => {
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
     if (await copyText(text)) { byId('copy-status').textContent = successSnapshot; return; }

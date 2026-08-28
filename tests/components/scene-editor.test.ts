@@ -112,6 +112,114 @@ describe('scene editor', () => {
     editor.destroy();
   });
 
+  it('loads an existing generated scene URL into every synchronized editor surface', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = 'https://timer.puxxlr.com/v1/scene/#v=1&h=GAME+NIGHT&th=sunset';
+
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    expect(app.querySelector<HTMLInputElement>('#headline')!.value).toBe('GAME NIGHT');
+    expect(app.querySelector<HTMLInputElement>('#theme-sunset')!.checked).toBe(true);
+    expect(app.querySelector('.scene-headline')?.textContent).toBe('GAME NIGHT');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toContain('v=1&h=GAME+NIGHT&th=sunset');
+    expect(app.querySelector('#import-status')?.textContent).toBe('Existing scene URL loaded.');
+    editor.destroy();
+  });
+
+  it('preserves imported countdown precision when the scene is copied', async () => {
+    vi.setSystemTime(new Date('2026-08-28T12:00:00Z'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const importedUrl = 'https://timer.puxxlr.com/v1/scene/#v=1&ct=2026-09-01T12%3A34%3A56.789Z';
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = importedUrl;
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0]![0]).toContain('ct=2026-09-01T12%3A34%3A56.789Z');
+    editor.destroy(); vi.useRealTimers();
+  });
+
+  it('clears stale schedule errors after loading a valid scheduled scene', () => {
+    vi.setSystemTime(new Date('2026-08-28T12:00:00Z'));
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    (app.querySelector('#schedule-scene') as HTMLButtonElement).click();
+    const date = app.querySelector<HTMLInputElement>('#countdown-date')!;
+    const time = app.querySelector<HTMLInputElement>('#countdown-time')!;
+    date.value = ''; time.value = '';
+    date.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(date.getAttribute('aria-invalid')).toBe('true');
+
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = 'https://timer.puxxlr.com/v1/scene/#v=1&ct=2026-09-01T12%3A34%3A56Z';
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    expect(date.getAttribute('aria-invalid')).toBeNull();
+    expect(time.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#countdown-date-error')?.textContent).toBe('');
+    expect(app.querySelector('#countdown-time-error')?.textContent).toBe('');
+    expect(app.querySelector('#countdown-error')?.textContent).toBe('');
+    editor.destroy(); vi.useRealTimers();
+  });
+
+  it('rejects an untrusted scene URL without replacing the current scene', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    const beforeUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+    const beforeHeadline = app.querySelector<HTMLInputElement>('#headline')!.value;
+    existing.value = 'https://example.com/v1/scene/#v=1&h=IMPOSTOR';
+
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    expect(existing.getAttribute('aria-invalid')).toBe('true');
+    expect(app.querySelector('#import-status')?.textContent).toContain('could not be loaded');
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(beforeUrl);
+    expect(app.querySelector<HTMLInputElement>('#headline')!.value).toBe(beforeHeadline);
+    editor.destroy();
+  });
+
+  it('keeps the current valid scene exportable after an import is rejected', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const currentUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = 'https://example.com/v1/scene/#v=1&h=IMPOSTOR';
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    (app.querySelector('#copy-url') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(currentUrl));
+    expect(document.activeElement).not.toBe(existing);
+    await vi.waitFor(() => expect(app.querySelector('#copy-status')?.textContent).toContain('Scene URL copied'));
+    editor.destroy();
+  });
+
+  it('clears the scene import error as soon as the user edits the URL', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = 'not a scene URL';
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+    expect(existing.getAttribute('aria-invalid')).toBe('true');
+
+    existing.value = '#v=1';
+    existing.dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(existing.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#import-status')?.textContent).toBe('');
+    editor.destroy();
+  });
+
   it('opens the generated scene in a separate preview tab', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     const app = document.querySelector('#app') as HTMLElement;
