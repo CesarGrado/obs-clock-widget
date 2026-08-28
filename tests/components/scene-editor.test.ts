@@ -112,6 +112,34 @@ describe('scene editor', () => {
     editor.destroy();
   });
 
+  it('opens the generated scene in a separate preview tab', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const url = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+
+    (app.querySelector('#open-preview') as HTMLButtonElement).click();
+
+    expect(open).toHaveBeenCalledWith(url, '_blank', 'noopener');
+    editor.destroy(); open.mockRestore();
+  });
+
+  it('blocks opening a stale scene preview while a scene field is invalid', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+    headline.value = '';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (app.querySelector('#open-preview') as HTMLButtonElement).click();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(headline);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Fix the highlighted scene fields before using this scene.');
+    editor.destroy(); open.mockRestore();
+  });
+
   it('copies complete scene setup text through the legacy fallback when clipboard permission is denied', async () => {
     const writeText = vi.fn().mockRejectedValue(new DOMException('Denied', 'NotAllowedError'));
     Object.assign(navigator, { clipboard: { writeText } });

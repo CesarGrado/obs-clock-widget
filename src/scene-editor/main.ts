@@ -110,7 +110,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     actions.append(element('label', { for: 'preview-zero' }, 'Preview zero state'));
     actions.append(element('input', { id: 'preview-zero', type: 'checkbox' }));
     const url = element('input', { id: 'scene-url', type: 'text', readonly: '' }); labeled(actions, 'Scene URL', url);
-    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
+    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('button', { id: 'open-preview', type: 'button' }, 'Open scene preview'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
     app.append(actions);
   };
   build();
@@ -284,13 +284,13 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     scheduleFromInputs();
     const invalid = ['date', 'time'].map((key) => byId<HTMLInputElement>(`countdown-${key}`)).find((node) => node.getAttribute('aria-invalid') === 'true');
     if (!invalid) return true;
-    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted schedule fields before copying this scene.'; return false;
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted schedule fields before using this scene.'; return false;
   };
   const commitScene = () => {
     if (!commitSchedule()) return false;
     const invalid = app.querySelector<HTMLInputElement>('[aria-invalid="true"]:not(:disabled)');
     if (!invalid) return true;
-    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted scene fields before copying this scene.'; return false;
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted scene fields before using this scene.'; return false;
   };
 
   byId('reveal-delay').addEventListener('change', (event) => { config.revealDelay = Number((event.target as HTMLSelectElement).value) as SceneConfig['revealDelay']; refresh(); });
@@ -302,6 +302,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   };
   byId('copy-url').addEventListener('click', () => { if (commitScene()) void copy(sceneUrl(config), 'Scene URL copied.'); });
   byId('copy-setup').addEventListener('click', () => { if (commitScene()) void copy(`OBS Browser Source\nURL: ${sceneUrl(config)}\nSize: 1920×1080\nLeave custom CSS empty and both source lifecycle options off.`, 'Full-screen OBS setup copied.'); });
+  byId('open-preview').addEventListener('click', () => { if (commitScene()) window.open(sceneUrl(config), '_blank', 'noopener'); });
 
   const previewPanel = element('section', { class: 'preview-panel', id: 'preview-panel', 'aria-labelledby': 'scene-preview-heading' });
   const previewHead = element('div', { class: 'preview-head' });
