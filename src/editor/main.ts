@@ -51,7 +51,11 @@ function buildLine(parent: HTMLElement, n: number) {
   const size = input(`line${n}-size`, 'number', 10, 240, 1); size.setAttribute('aria-describedby', `line${n}-size-error`); labeled(section, 'Size (px)', size);
   section.append(element('p', { id: `line${n}-size-error`, class: 'error', role: 'alert' }));
   labeled(section, 'Weight', element('select', { id: `line${n}-weight` })); labeled(section, 'Color', input(`line${n}-color`, 'color'));
-  labeled(section, 'Opacity', input(`line${n}-opacity`, 'range', 0, 1, .05)); labeled(section, 'Transform', select(`line${n}-transform`, ['none','uppercase','lowercase'])); parent.append(section);
+  const opacity = input(`line${n}-opacity`, 'range', 0, 1, .05);
+  const opacityRow = element('div', { class: 'range-value' });
+  opacityRow.append(opacity, element('output', { id: `line${n}-opacity-value`, for: opacity.id }));
+  section.append(element('label', { for: opacity.id }, 'Opacity'), opacityRow);
+  labeled(section, 'Transform', select(`line${n}-transform`, ['none','uppercase','lowercase'])); parent.append(section);
 }
 
 function buildEditor(app: HTMLElement) {
@@ -159,7 +163,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     ['gap', 'stroke', 'shadow'].forEach((key) => { byId<HTMLInputElement>(key).removeAttribute('aria-invalid'); byId(`${key}-error`).textContent = ''; });
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; const format = byId<HTMLInputElement>(`line${n}-format`); format.value = line.format; format.removeAttribute('aria-invalid'); byId(`line${n}-error`).textContent = ''; syncFormatPreset(n, line.format);
       byId<HTMLSelectElement>(`line${n}-font`).value = line.font; const size = byId<HTMLInputElement>(`line${n}-size`); size.value = String(line.size); size.removeAttribute('aria-invalid'); byId(`line${n}-size-error`).textContent = ''; weightOptions(n, line.font, line.weight);
-      byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
+      byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLOutputElement>(`line${n}-opacity-value`).value = `${Math.round(line.opacity * 100)}%`; byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
   const refreshSummary = () => {
     const resolved = byId('resolved-target');
@@ -334,6 +338,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
       control.removeAttribute('aria-invalid'); byId('copy-status').textContent = ''; syncFormatPreset(n, control.value);
     }
     (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control);
+    if (field === 'opacity') byId<HTMLOutputElement>(`line${n}-opacity-value`).value = `${Math.round(Number(control.value) * 100)}%`;
     if (field === 'font') { const line = config.lines[n - 1]!; line.weight = clampWeight(line.font, line.weight); weightOptions(n, line.font, line.weight); }
     byId<HTMLSelectElement>('preset').value = 'Custom'; refresh();
   }); };

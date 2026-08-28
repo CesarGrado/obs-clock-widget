@@ -12,6 +12,22 @@ describe('clock editor', () => {
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=HH%3Amm');
     expect(app.querySelectorAll('label[for="line1-format"]')).toHaveLength(1); editor.destroy();
   });
+  it('shows synchronized numeric percentages for both opacity sliders', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const opacity = app.querySelector<HTMLInputElement>('#line1-opacity')!;
+    const value = app.querySelector<HTMLOutputElement>('#line1-opacity-value')!;
+
+    expect(value.value).toBe('100%');
+    expect(value.htmlFor.contains('line1-opacity')).toBe(true);
+
+    opacity.value = '0.55'; opacity.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(value.value).toBe('55%');
+
+    editor.applyConfig({ ...DEFAULT_CONFIG, lines: [{ ...DEFAULT_CONFIG.lines[0]!, opacity: 0.4 }, DEFAULT_CONFIG.lines[1]!] });
+    expect(value.value).toBe('40%');
+    expect(app.querySelector<HTMLOutputElement>('#line2-opacity-value')!.value).toBe('90%');
+    editor.destroy();
+  });
   it('explains invalid line sizes independently, preserves the generated URL, and clears errors on recovery or config sync', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const url = app.querySelector<HTMLInputElement>('#obs-url')!;
