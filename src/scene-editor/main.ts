@@ -60,7 +60,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     for (const [key, label] of [['headline', 'Headline'], ['subtitle', 'Subtitle'], ['number', 'Countdown'], ['reveal', 'Zero message']] as const) {
       const headingId = `${key}-typography-heading`;
       const row = element('div', { class: 'type-row', role: 'group', 'aria-labelledby': headingId });
-      row.append(element('h3', { id: headingId }, label));
+      row.append(element('h2', { id: headingId }, label));
       labeledField(row, `${label} font`, fontSelect(`${key}-font`));
       const sizeField = labeledField(row, `${label} size (px)`, numberInput(`${key}-size`, 10, 240));
       sizeField.append(element('p', { id: `${key}-size-error`, class: 'error', role: 'alert' }));

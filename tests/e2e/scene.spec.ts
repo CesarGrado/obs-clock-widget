@@ -14,7 +14,7 @@ test('scene editor exposes one page H1 and a named, non-heading preview', async 
   await expect(page.locator('#preview-root .scene-headline')).not.toHaveRole('heading');
 
   const results = await new AxeBuilder({ page }).analyze();
-  expect(results.violations.filter((violation) => ['serious', 'critical'].includes(violation.impact ?? ''))).toEqual([]);
+  expect(results.violations).toEqual([]);
 });
 
 test('scene builder produces a working full-screen scene URL', async ({ page, context }) => {
