@@ -52,6 +52,24 @@ describe('scene editor', () => {
     editor.destroy();
   });
 
+  it('keeps the original undo snapshot after repeated resets', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+    const reset = app.querySelector<HTMLButtonElement>('#reset')!;
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    headline.value = 'DOUBLE RESET TEST';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+
+    reset.click();
+    reset.click();
+    undo.click();
+
+    expect(headline.value).toBe('DOUBLE RESET TEST');
+    editor.destroy();
+  });
+
   it('invalidates stale reset history when an external scene config is applied', () => {
     const app = document.querySelector('#app') as HTMLElement;
     const editor = initSceneEditor(app);

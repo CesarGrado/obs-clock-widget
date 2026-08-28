@@ -327,7 +327,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   });
   existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
   byId('reset').addEventListener('click', () => {
-    resetSnapshot = cloneSceneConfig(config);
+    if (encodeSceneConfig(config) !== encodeSceneConfig(DEFAULT_SCENE_CONFIG)) resetSnapshot = cloneSceneConfig(config);
     config = cloneSceneConfig(DEFAULT_SCENE_CONFIG); scheduleActive = false; sync(); clearScheduleErrors(); refresh();
     byId<HTMLButtonElement>('undo-reset').disabled = false; byId('copy-status').textContent = 'Defaults restored. Undo is available.';
   });
