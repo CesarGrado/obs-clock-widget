@@ -268,12 +268,12 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   const commitCountdown = () => {
     if (config.mode !== 'countdown') return true;
     const targetInput = byId<HTMLInputElement>('countdown-target');
-    if (targetInput.getAttribute('aria-invalid') === 'true') { byId<HTMLDetailsElement>('countdown-advanced').open = true; targetInput.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields before copying.'; return false; }
+    if (targetInput.getAttribute('aria-invalid') === 'true') { byId<HTMLDetailsElement>('countdown-advanced').open = true; targetInput.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields first.'; return false; }
     const scheduleControls = ['date', 'time'].map((key) => byId<HTMLInputElement>(`countdown-${key}`));
     scheduleControls.forEach((control) => { if (!control.value) control.setAttribute('aria-invalid', 'true'); });
     const invalid = scheduleControls.find((control) => control.getAttribute('aria-invalid') === 'true');
     if (!invalid) return true;
-    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields before copying.'; return false;
+    invalid.focus(); byId('copy-status').textContent = 'Fix the highlighted countdown fields first.'; return false;
   };
   app.querySelectorAll<HTMLInputElement>('input[name="post-zero"]').forEach((radio) => radio.addEventListener('change', (event) => {
     config.overtime = (event.target as HTMLInputElement).value === 'overtime';
@@ -375,7 +375,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     try { await navigator.clipboard.writeText(text); byId('copy-status').textContent = successSnapshot; } catch { byId('copy-status').textContent = 'Clipboard unavailable. Select and copy the URL field manually.'; byId<HTMLInputElement>('obs-url').select(); }
   };
   byId('copy-url').addEventListener('click', () => { if (commitCountdown()) void copy(widgetUrl(config), 'OBS URL copied.'); }); byId('copy-setup').addEventListener('click', () => { if (commitCountdown()) void copy(`OBS Browser Source\nURL: ${widgetUrl(config)}\nSize: ${byId<HTMLSelectElement>('obs-size').value}\nLeave custom CSS empty and both source lifecycle options off.`, 'Setup text copied.'); });
-  byId('open-preview').addEventListener('click', () => window.open(widgetUrl(config), '_blank', 'noopener'));
+  byId('open-preview').addEventListener('click', () => { if (commitCountdown()) window.open(widgetUrl(config), '_blank', 'noopener'); });
   sync(); refresh(); return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); clearSummaryTimer(); clock?.stop(); }, applyConfig: (next: ClockConfig) => { config = cloneClockConfig(next); resetSnapshot = undefined; byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh(); } };
 }
 

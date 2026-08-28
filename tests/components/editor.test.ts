@@ -116,6 +116,22 @@ describe('clock editor', () => {
     expect(writeText).not.toHaveBeenCalled();
     editor.destroy();
   });
+  it('blocks previewing a stale countdown when the exact target is invalid', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const countdownCard = app.querySelector<HTMLInputElement>('#mode-countdown')!; countdownCard.checked = true; countdownCard.dispatchEvent(new Event('change', { bubbles: true }));
+    const advanced = app.querySelector<HTMLDetailsElement>('#countdown-advanced')!;
+    const target = app.querySelector<HTMLInputElement>('#countdown-target')!;
+    target.value = 'not-a-date'; target.dispatchEvent(new Event('input', { bubbles: true }));
+
+    (app.querySelector('#open-preview') as HTMLButtonElement).click();
+
+    expect(open).not.toHaveBeenCalled();
+    expect(advanced.open).toBe(true);
+    expect(document.activeElement).toBe(target);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Fix the highlighted countdown fields first.');
+    open.mockRestore(); editor.destroy();
+  });
   it('requires a countdown time before copying instead of silently using midnight', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
