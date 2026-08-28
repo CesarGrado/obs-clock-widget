@@ -47,7 +47,9 @@ function buildLine(parent: HTMLElement, n: number) {
   const presets = element('select', { id: `line${n}-format-preset` }); FORMAT_PRESETS.forEach(([value, label]) => presets.append(option(value, label))); labeled(section, 'Format preset', presets);
   const format = input(`line${n}-format`, 'text'); format.maxLength = 64; format.setAttribute('aria-describedby', `line${n}-error token-help`); labeled(section, 'Format', format);
   section.append(element('p', { id: `line${n}-error`, class: 'error', role: 'alert' }));
-  labeled(section, 'Font', fontSelect(`line${n}-font`)); labeled(section, 'Size (px)', input(`line${n}-size`, 'number', 10, 240, 1));
+  labeled(section, 'Font', fontSelect(`line${n}-font`));
+  const size = input(`line${n}-size`, 'number', 10, 240, 1); size.setAttribute('aria-describedby', `line${n}-size-error`); labeled(section, 'Size (px)', size);
+  section.append(element('p', { id: `line${n}-size-error`, class: 'error', role: 'alert' }));
   labeled(section, 'Weight', element('select', { id: `line${n}-weight` })); labeled(section, 'Color', input(`line${n}-color`, 'color'));
   labeled(section, 'Opacity', input(`line${n}-opacity`, 'range', 0, 1, .05)); labeled(section, 'Transform', select(`line${n}-transform`, ['none','uppercase','lowercase'])); parent.append(section);
 }
@@ -148,7 +150,7 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
     byId<HTMLInputElement>('timezone').value = config.timezone; byId<HTMLSelectElement>('locale').value = config.locale; byId<HTMLSelectElement>('align').value = config.align;
     byId<HTMLInputElement>('gap').value = String(config.gap); byId<HTMLInputElement>('stroke').value = String(config.stroke); byId<HTMLInputElement>('shadow').value = String(config.shadow);
     config.lines.forEach((line, i) => { const n = i + 1; byId<HTMLInputElement>(`line${n}-enabled`).checked = line.enabled; byId<HTMLInputElement>(`line${n}-format`).value = line.format; syncFormatPreset(n, line.format);
-      byId<HTMLSelectElement>(`line${n}-font`).value = line.font; byId<HTMLInputElement>(`line${n}-size`).value = String(line.size); weightOptions(n, line.font, line.weight);
+      byId<HTMLSelectElement>(`line${n}-font`).value = line.font; const size = byId<HTMLInputElement>(`line${n}-size`); size.value = String(line.size); size.removeAttribute('aria-invalid'); byId(`line${n}-size-error`).textContent = ''; weightOptions(n, line.font, line.weight);
       byId<HTMLInputElement>(`line${n}-color`).value = line.color.slice(0, 7).toLowerCase(); byId<HTMLInputElement>(`line${n}-opacity`).value = String(line.opacity); byId<HTMLSelectElement>(`line${n}-transform`).value = line.transform; });
   };
   const refreshSummary = () => {
@@ -293,7 +295,11 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   timezoneInput.addEventListener('focus', () => showTimezoneOptions(timezoneInput.value === config.timezone ? '' : timezoneInput.value));
   timezoneInput.addEventListener('blur', () => { window.setTimeout(() => { if (document.activeElement !== timezoneInput) closeTimezoneOptions(); }, 0); });
   const lineControl = (n: number, field: keyof ClockLine, parse: (control: HTMLInputElement | HTMLSelectElement) => unknown) => { const control = byId<HTMLInputElement | HTMLSelectElement>(`line${n}-${field}`); const event = control instanceof HTMLInputElement && ['text','number','range'].includes(control.type) ? 'input' : 'change'; control.addEventListener(event, () => {
-    if (!control.validity.valid) return;
+    if (field === 'size') {
+      const error = byId(`line${n}-size-error`);
+      if (!control.validity.valid) { control.setAttribute('aria-invalid', 'true'); error.textContent = 'Enter a whole-number size from 10 to 240 pixels.'; return; }
+      control.removeAttribute('aria-invalid'); error.textContent = '';
+    } else if (!control.validity.valid) return;
     if (field === 'format') { const error = validateFormat(control.value); byId(`line${n}-error`).textContent = error ?? ''; if (error) return; syncFormatPreset(n, control.value); }
     (config.lines[n - 1] as unknown as Record<string, unknown>)[field] = parse(control);
     if (field === 'font') { const line = config.lines[n - 1]!; line.weight = clampWeight(line.font, line.weight); weightOptions(n, line.font, line.weight); }

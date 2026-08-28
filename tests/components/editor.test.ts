@@ -12,6 +12,34 @@ describe('clock editor', () => {
     expect((app.querySelector('#obs-url') as HTMLInputElement).value).toContain('f1=HH%3Amm');
     expect(app.querySelectorAll('label[for="line1-format"]')).toHaveLength(1); editor.destroy();
   });
+  it('explains invalid line sizes independently, preserves the generated URL, and clears errors on recovery or config sync', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const url = app.querySelector<HTMLInputElement>('#obs-url')!;
+
+    for (const line of [1, 2]) {
+      const size = app.querySelector<HTMLInputElement>(`#line${line}-size`)!;
+      const beforeUrl = url.value;
+      size.value = '241'; size.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(size.getAttribute('aria-describedby')).toBe(`line${line}-size-error`);
+      expect(size.getAttribute('aria-invalid')).toBe('true');
+      expect(app.querySelector(`#line${line}-size-error`)?.textContent).toBe('Enter a whole-number size from 10 to 240 pixels.');
+      expect(url.value).toBe(beforeUrl);
+      expect(app.querySelector<HTMLInputElement>(`#line${line === 1 ? 2 : 1}-size`)!.getAttribute('aria-invalid')).toBeNull();
+
+      size.value = '120'; size.dispatchEvent(new Event('input', { bubbles: true }));
+      expect(size.getAttribute('aria-invalid')).toBeNull();
+      expect(app.querySelector(`#line${line}-size-error`)?.textContent).toBe('');
+      expect(url.value).toContain(`s${line}=120`);
+    }
+
+    const line2Size = app.querySelector<HTMLInputElement>('#line2-size')!;
+    line2Size.value = '9'; line2Size.dispatchEvent(new Event('input', { bubbles: true }));
+    expect(line2Size.getAttribute('aria-invalid')).toBe('true');
+    editor.applyConfig(DEFAULT_CONFIG);
+    expect(line2Size.getAttribute('aria-invalid')).toBeNull();
+    expect(app.querySelector('#line2-size-error')?.textContent).toBe('');
+    editor.destroy();
+  });
   it('configures an absolute event countdown and displays its resolved target', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
