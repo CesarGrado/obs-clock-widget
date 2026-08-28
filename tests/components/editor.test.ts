@@ -492,6 +492,31 @@ describe('clock editor', () => {
     expect(undo.disabled).toBe(true);
     editor.destroy();
   });
+  it('keeps undo unavailable when reset has no settings to recover', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    (app.querySelector('#reset') as HTMLButtonElement).click();
+
+    expect(undo.disabled).toBe(true);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Defaults already restored.');
+    editor.destroy();
+  });
+  it('keeps the original undo snapshot after repeated resets', () => {
+    const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
+    const format = app.querySelector<HTMLInputElement>('#line1-format')!;
+    format.value = 'HH:mm'; format.dispatchEvent(new Event('input', { bubbles: true }));
+    const customizedUrl = (app.querySelector('#obs-url') as HTMLInputElement).value;
+    const reset = app.querySelector<HTMLButtonElement>('#reset')!;
+
+    reset.click();
+    reset.click();
+    (app.querySelector('#undo-reset') as HTMLButtonElement).click();
+
+    expect(format.value).toBe('HH:mm');
+    expect((app.querySelector('#obs-url') as HTMLInputElement).value).toBe(customizedUrl);
+    editor.destroy();
+  });
   it('updates undo to the configuration immediately before the latest reset', () => {
     const app = document.querySelector('#app') as HTMLElement; const editor = initEditor(app);
     const format = app.querySelector<HTMLInputElement>('#line1-format')!;

@@ -2,7 +2,7 @@ import '../config/fonts';
 import '../styles/base.css';
 import '../styles/editor.css';
 import '../styles/clock.css';
-import { decodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
+import { decodeConfig, encodeConfig, URL_WARNING_LENGTH, widgetUrl } from '../config/codec';
 import { DEFAULT_CONFIG, LOCALES, type ClockConfig, type ClockLine } from '../config/defaults';
 import { FONTS, FONT_CATEGORIES, clampWeight, fontById } from '../config/fonts';
 import { isCatalogTimezone, isTimezoneSupported, searchTimezones, type TimezoneId } from '../timezones/catalog';
@@ -377,9 +377,11 @@ export function initEditor(app: HTMLElement): { destroy: () => void; applyConfig
   existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
   existingUrl.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); importForm.requestSubmit(); } });
   byId('reset').addEventListener('click', () => {
-    resetSnapshot = cloneClockConfig(config);
+    if (encodeConfig(config) !== encodeConfig(DEFAULT_CONFIG)) resetSnapshot = cloneClockConfig(config);
     config = cloneClockConfig(DEFAULT_CONFIG); byId<HTMLSelectElement>('preset').value = 'Custom'; sync(); refresh();
-    byId<HTMLButtonElement>('undo-reset').disabled = false; byId('copy-status').textContent = 'Defaults restored. Undo is available.';
+    const canUndo = resetSnapshot !== undefined;
+    byId<HTMLButtonElement>('undo-reset').disabled = !canUndo;
+    byId('copy-status').textContent = canUndo ? 'Defaults restored. Undo is available.' : 'Defaults already restored.';
   });
   byId('undo-reset').addEventListener('click', () => {
     if (!resetSnapshot) return;
