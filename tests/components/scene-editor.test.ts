@@ -17,6 +17,82 @@ describe('scene editor', () => {
     expect(url).toContain('/v1/scene/#v=1');
     editor.destroy();
   });
+
+  it('resets a customized scene and can undo the reset once', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+    const reset = app.querySelector<HTMLButtonElement>('#reset')!;
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    headline.value = 'GAME NIGHT';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+    (app.querySelector('#theme-sunset') as HTMLInputElement).click();
+    (app.querySelector('#quick-10') as HTMLButtonElement).click();
+    const customizedUrl = app.querySelector<HTMLInputElement>('#scene-url')!.value;
+    expect(undo.disabled).toBe(true);
+
+    reset.click();
+
+    expect(headline.value).toBe(DEFAULT_SCENE_CONFIG.headline);
+    expect(app.querySelector<HTMLInputElement>('#theme-dark-gradient')!.checked).toBe(true);
+    expect(app.querySelector<HTMLInputElement>('#countdown-date')!.disabled).toBe(true);
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).not.toBe(customizedUrl);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Defaults restored. Undo is available.');
+    expect(undo.disabled).toBe(false);
+
+    undo.click();
+
+    expect(headline.value).toBe('GAME NIGHT');
+    expect(app.querySelector<HTMLInputElement>('#theme-sunset')!.checked).toBe(true);
+    expect(app.querySelector<HTMLInputElement>('#countdown-date')!.disabled).toBe(false);
+    expect(app.querySelector<HTMLInputElement>('#scene-url')!.value).toBe(customizedUrl);
+    expect(app.querySelector('#copy-status')?.textContent).toBe('Previous settings restored.');
+    expect(undo.disabled).toBe(true);
+    editor.destroy();
+  });
+
+  it('invalidates stale reset history when an external scene config is applied', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    headline.value = 'FIRST SCENE';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+    app.querySelector<HTMLButtonElement>('#reset')!.click();
+    expect(undo.disabled).toBe(false);
+
+    editor.applyConfig({ ...cloneSceneConfig(DEFAULT_SCENE_CONFIG), headline: 'EXTERNAL SCENE' });
+
+    expect(undo.disabled).toBe(true);
+    undo.click();
+    expect(headline.value).toBe('EXTERNAL SCENE');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('');
+    editor.destroy();
+  });
+
+  it('invalidates stale reset history when an existing scene URL is loaded', () => {
+    const app = document.querySelector('#app') as HTMLElement;
+    const editor = initSceneEditor(app);
+    const headline = app.querySelector<HTMLInputElement>('#headline')!;
+    const undo = app.querySelector<HTMLButtonElement>('#undo-reset')!;
+
+    headline.value = 'FIRST SCENE';
+    headline.dispatchEvent(new Event('input', { bubbles: true }));
+    app.querySelector<HTMLButtonElement>('#reset')!.click();
+    expect(undo.disabled).toBe(false);
+
+    const existing = app.querySelector<HTMLInputElement>('#existing-scene-url')!;
+    existing.value = 'https://timer.puxxlr.com/v1/scene/#v=1&h=IMPORTED+SCENE';
+    app.querySelector<HTMLFormElement>('.import-existing')!.requestSubmit();
+
+    expect(undo.disabled).toBe(true);
+    undo.click();
+    expect(headline.value).toBe('IMPORTED SCENE');
+    expect(app.querySelector('#copy-status')?.textContent).toBe('');
+    editor.destroy();
+  });
   it('starts unscheduled and keeps schedule, clear, quick duration, and zero-message timing synchronized', () => {
     vi.setSystemTime(new Date('2026-08-22T12:00:00Z'));
     const app = document.querySelector('#app') as HTMLElement;

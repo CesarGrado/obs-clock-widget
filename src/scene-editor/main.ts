@@ -115,15 +115,21 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
     const existingUrl = element('input', { id: 'existing-scene-url', type: 'text', maxlength: '4096', autocomplete: 'off', 'aria-describedby': 'import-help import-status' });
     importForm.append(element('label', { for: 'existing-scene-url' }, 'Load existing scene URL or fragment'), existingUrl, element('button', { id: 'load-existing', type: 'submit' }, 'Load'));
     actions.append(importForm, element('p', { id: 'import-help', class: 'hint' }, 'Paste a generated /v1/scene/ URL, or its fragment beginning with v=1 or #v=1.'), element('p', { id: 'import-status', role: 'status', 'aria-live': 'polite' }));
-    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('button', { id: 'open-preview', type: 'button' }, 'Open scene preview'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
+    actions.append(element('button', { id: 'copy-url', type: 'button' }, 'Copy scene URL'), element('button', { id: 'copy-setup', type: 'button' }, 'Copy full-screen OBS setup'), element('button', { id: 'open-preview', type: 'button' }, 'Open scene preview'), element('button', { id: 'reset', type: 'button', class: 'secondary' }, 'Reset'), element('button', { id: 'undo-reset', type: 'button', class: 'secondary', disabled: '' }, 'Undo reset'), element('p', { id: 'copy-status', role: 'status', class: 'hint' }), element('p', { id: 'scene-clipping-warning', role: 'status', class: 'warning', 'aria-live': 'polite' }));
     app.append(actions);
   };
   build();
   let config = location.hash ? decodeSceneConfig(location.hash) : cloneSceneConfig(DEFAULT_SCENE_CONFIG);
+  let resetSnapshot: SceneConfig | undefined;
   let scheduleActive = !isUnscheduledTarget(config.countdownTarget);
   let scene: ReturnType<typeof renderScene> | undefined;
   let clippingIssues: ClippingIssue[] = []; let clippingPending = false; let measurementRoot: HTMLElement | undefined;
   const layoutSettler = createLayoutSettler();
+  const clearResetHistory = () => {
+    resetSnapshot = undefined;
+    byId<HTMLButtonElement>('undo-reset').disabled = true;
+    byId('copy-status').textContent = '';
+  };
 
   const sync = () => {
     byId<HTMLInputElement>('headline').value = config.headline; byId<HTMLInputElement>('subtitle').value = config.subtitle; byId<HTMLInputElement>('reveal').value = config.reveal;
@@ -316,10 +322,20 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
       return;
     }
     existingUrl.removeAttribute('aria-invalid');
-    config = result.config; scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); clearScheduleErrors(); refresh();
+    config = result.config; clearResetHistory(); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); clearScheduleErrors(); refresh();
     byId('import-status').textContent = 'Existing scene URL loaded.';
   });
   existingUrl.addEventListener('input', () => { existingUrl.removeAttribute('aria-invalid'); byId('import-status').textContent = ''; });
+  byId('reset').addEventListener('click', () => {
+    resetSnapshot = cloneSceneConfig(config);
+    config = cloneSceneConfig(DEFAULT_SCENE_CONFIG); scheduleActive = false; sync(); clearScheduleErrors(); refresh();
+    byId<HTMLButtonElement>('undo-reset').disabled = false; byId('copy-status').textContent = 'Defaults restored. Undo is available.';
+  });
+  byId('undo-reset').addEventListener('click', () => {
+    if (!resetSnapshot) return;
+    config = resetSnapshot; resetSnapshot = undefined; scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); clearScheduleErrors(); refresh();
+    byId<HTMLButtonElement>('undo-reset').disabled = true; byId('copy-status').textContent = 'Previous settings restored.';
+  });
   const copy = async (text: string, success: string) => {
     const successSnapshot = clippingCopySuccess(success, clippingIssues.length > 0, clippingPending);
     if (await copyText(text)) { byId('copy-status').textContent = successSnapshot; return; }
@@ -343,7 +359,7 @@ export function initSceneEditor(app: HTMLElement): { destroy: () => void; applyC
   layout.append(controls, previewPanel);
   app.append(layout);
   sync(); refresh();
-  return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
+  return { destroy: () => { destroyPreviewNavigation(); layoutSettler.cancel(); measurementRoot?.remove(); scene?.stop(); }, applyConfig: (next: SceneConfig) => { config = cloneSceneConfig(next); clearResetHistory(); scheduleActive = !isUnscheduledTarget(config.countdownTarget); sync(); refresh(); } };
 }
 
 const app = document.querySelector<HTMLElement>('#app');
